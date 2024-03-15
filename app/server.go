@@ -1,11 +1,12 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"net"
 	"os"
+	"strings"
+	"sync"
 )
 
 func main() {
@@ -18,38 +19,43 @@ func main() {
 		os.Exit(1)
 	}
 	defer listener.Close()
-	conn, err := listener.Accept()
-	if err != nil {
-		fmt.Println("Error accepting connection: ", err.Error())
+	var wg sync.WaitGroup
+	for {
+		conn, err := listener.Accept()
+		wg.Add(1)
+		if err != nil {
+			fmt.Println("Error accepting connection: ", err.Error())
+		}
+		go handleClient(conn, &wg)
 	}
-	handleClient(conn)
+
 }
 
-func handleClient(conn net.Conn) {
+func handleClient(conn net.Conn, wg *sync.WaitGroup) {
 	defer conn.Close()
+	defer wg.Done()
 
+	buf := make([]byte, 1024)
 	for {
-		s := bufio.NewScanner(conn)
-		s.Split(bufio.ScanLines)
-		for s.Scan() {
-			_ = s.Text()
-			_, err := WritePong(conn)
-			if err != nil {
-				fmt.Println("error while reading from client ", s.Err())
-				return
+		n, err := conn.Read(buf)
+		if err != nil {
+			if err != io.EOF {
+				fmt.Println("error while reading: ", err)
 			}
 		}
-		if s.Err() == io.EOF {
-			_ = s.Text()
-			WritePong(conn)
-		} else if s.Err() != nil {
-			fmt.Println("error while reading from client ", s.Err())
-			return
+
+		ins := strings.Split(string(buf[:n]), "\n")
+		for range ins {
+			_, err := WritePong(conn)
+			if err != nil {
+				fmt.Println("error while writing: ", err)
+			}
 		}
 	}
 }
 
 func WritePong(conn net.Conn) (int, error) {
 	pong := []byte("+PONG\r\n")
+	fmt.Println("writing pong")
 	return conn.Write(pong)
 }
