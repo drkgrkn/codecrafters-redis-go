@@ -5,8 +5,6 @@ import (
 	"io"
 	"net"
 	"os"
-	"strings"
-	"sync"
 )
 
 func main() {
@@ -19,38 +17,39 @@ func main() {
 		os.Exit(1)
 	}
 	defer listener.Close()
-	var wg sync.WaitGroup
 	for {
 		conn, err := listener.Accept()
-		wg.Add(1)
 		if err != nil {
 			fmt.Println("Error accepting connection: ", err.Error())
 		}
-		go handleClient(conn, &wg)
+		go handleClient(conn)
 	}
 
 }
 
-func handleClient(conn net.Conn, wg *sync.WaitGroup) {
-	defer conn.Close()
-	defer wg.Done()
+func handleClient(conn net.Conn) {
+	defer func() {
+		conn.Close()
+		fmt.Println("Closing connection with client")
+	}()
 
 	buf := make([]byte, 1024)
+main:
 	for {
-		n, err := conn.Read(buf)
+		_, err := conn.Read(buf)
 		if err != nil {
 			if err != io.EOF {
 				fmt.Println("error while reading: ", err)
+				break main
 			}
 		}
 
-		ins := strings.Split(string(buf[:n]), "\n")
-		for range ins {
-			_, err := WritePong(conn)
-			if err != nil {
-				fmt.Println("error while writing: ", err)
-			}
+		_, err = WritePong(conn)
+		if err != nil {
+			fmt.Println("error while writing: ", err)
+			break main
 		}
+		//ins := strings.Split(string(buf[:n]), "\n")
 	}
 }
 
