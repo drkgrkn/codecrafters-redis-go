@@ -49,7 +49,7 @@ main:
 			fmt.Println("error while writing: ", err)
 			break main
 		}
-		//ins := strings.Split(string(buf[:n]), "\n")
+		///ins := strings.Split(string(buf[:n]), "\n")
 	}
 }
 
