@@ -16,6 +16,7 @@ func nextString(readWriter *bufio.ReadWriter) (string, error) {
 	s = strings.Trim(s, "\r\n")
 	return s, nil
 }
+
 func HandleRequest(readWriter *bufio.ReadWriter) error {
 	lead, err := nextString(readWriter)
 	if err != nil {
@@ -38,7 +39,7 @@ func HandleRequest(readWriter *bufio.ReadWriter) error {
 		}
 		fmt.Printf("data in command %d, %s\n", i, data[i])
 	}
-	// command
+	// command handling
 	switch strings.ToLower(data[0]) {
 	case "ping":
 		if len(data) != 1 {
@@ -54,6 +55,27 @@ func HandleRequest(readWriter *bufio.ReadWriter) error {
 		}
 		fmt.Printf("echoing \"%s\"\n", data[1])
 		_, err = readWriter.WriteString(SerializeBulkString(data[1]))
+		if err != nil {
+			return err
+		}
+	case "get":
+		if len(data) != 2 {
+			return errors.New("incorrect number of arguments for the set command")
+		}
+		val, ok := store.Get(data[1])
+		if !ok {
+			_, err = readWriter.WriteString(SerializeBulkString("-1"))
+			if err != nil {
+				return err
+			}
+		}
+		_, err = readWriter.WriteString(SerializeBulkString(val))
+	case "set":
+		if len(data) != 3 {
+			return errors.New("incorrect number of arguments for the get command")
+		}
+		store.Set(data[1], data[2])
+		_, err = readWriter.WriteString(SerializeSimpleString("OK"))
 		if err != nil {
 			return err
 		}
