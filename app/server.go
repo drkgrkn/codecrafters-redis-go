@@ -7,6 +7,11 @@ import (
 	"os"
 )
 
+const (
+	CommandECHO = "echo"
+	CommandPING = "ping"
+)
+
 func main() {
 	// You can use print statements as follows for debugging, they'll be visible when running tests.
 	fmt.Println("Logs from your program will appear here!")
@@ -49,7 +54,6 @@ main:
 			fmt.Println("error while writing: ", err)
 			break main
 		}
-		///ins := strings.Split(string(buf[:n]), "\n")
 	}
 }
 
