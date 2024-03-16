@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -64,7 +65,7 @@ func ProcessSetRequest(rw *bufio.ReadWriter, data []string) error {
 			return err
 		}
 	} else if len(data) == 5 {
-		if data[3] == "px" {
+		if strings.ToLower(data[3]) == "px" {
 			dur, err := strconv.Atoi(data[4])
 			if err != nil {
 				return err

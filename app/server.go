@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"io"
 	"net"
@@ -17,18 +18,21 @@ const (
 
 func main() {
 	// You can use print statements as follows for debugging, they'll be visible when running tests.
-	fmt.Println("Logs from your program will appear here!")
+	fmt.Println("logs from your program will appear here!")
+	port := flag.Int("port", 6379, "port of the instance")
+	flag.Parse()
 
-	listener, err := net.Listen("tcp", "0.0.0.0:6379")
+	address := fmt.Sprintf("0.0.0.0:%d", *port)
+	listener, err := net.Listen("tcp", address)
 	if err != nil {
-		fmt.Println("Failed to bind to port 6379")
+		fmt.Println("failed to bind to port ", port)
 		os.Exit(1)
 	}
 	defer listener.Close()
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			fmt.Println("Error accepting connection: ", err.Error())
+			fmt.Println("error accepting connection: ", err.Error())
 		}
 		go handleClient(conn)
 	}
@@ -38,7 +42,7 @@ func main() {
 func handleClient(conn net.Conn) {
 	defer func() {
 		conn.Close()
-		fmt.Println("Closing connection with client")
+		fmt.Println("closing connection with client")
 	}()
 
 	r := bufio.NewReader(conn)
