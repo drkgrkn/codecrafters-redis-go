@@ -9,7 +9,7 @@ func DeserializeSimpleString(s string) (string, error) {
 	return ret, nil
 }
 func SerializeSimpleString(s string) string {
-	v := fmt.Sprintf("_%s\r\n", s)
+	v := fmt.Sprintf("+%s\r\n", s)
 	return v
 }
 func DeserializeSimpleError(s string) (string, error) {

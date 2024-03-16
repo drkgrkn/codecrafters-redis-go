@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"net"
 	"os"
+
+	"github.com/codecrafters-io/redis-starter-go/app/protocol"
 )
 
 const (
@@ -38,21 +41,17 @@ func handleClient(conn net.Conn) {
 		fmt.Println("Closing connection with client")
 	}()
 
-	buf := make([]byte, 1024)
-main:
+	r := bufio.NewReader(conn)
+	w := bufio.NewWriter(conn)
+	rw := bufio.NewReadWriter(r, w)
 	for {
-		_, err := conn.Read(buf)
+		err := protocol.HandleRequest(rw)
 		if err != nil {
-			if err != io.EOF {
-				fmt.Println("error while reading: ", err)
-				break main
+			if err == io.EOF {
+				fmt.Printf("client disconnected")
+				return
 			}
-		}
-
-		_, err = WritePong(conn)
-		if err != nil {
-			fmt.Println("error while writing: ", err)
-			break main
+			fmt.Printf("couldn't handle request %s\n", err)
 		}
 	}
 }
