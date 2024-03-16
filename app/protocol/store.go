@@ -1,6 +1,9 @@
 package protocol
 
-import "sync"
+import (
+	"sync"
+	"time"
+)
 
 type Store struct {
 	m    map[string]string
@@ -27,4 +30,14 @@ func (store *Store) Get(key string) (string, bool) {
 	defer store.lock.RUnlock()
 	val, ok := store.m[key]
 	return val, ok
+}
+
+func (store *Store) SetWithTTL(key string, val string, ttl time.Duration) {
+	store.Set(key, val)
+	go func() {
+		time.Sleep(ttl)
+		store.lock.Lock()
+		defer store.lock.Unlock()
+		delete(store.m, key)
+	}()
 }

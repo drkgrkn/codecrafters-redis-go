@@ -27,3 +27,6 @@ func SerializeBulkString(s string) string {
 	v := fmt.Sprintf("$%d\r\n%s\r\n", len(s), s)
 	return v
 }
+func SerializeNullBulkString() string {
+	return "$-1\r\n"
+}

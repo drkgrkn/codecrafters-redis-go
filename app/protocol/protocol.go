@@ -42,40 +42,22 @@ func HandleRequest(readWriter *bufio.ReadWriter) error {
 	// command handling
 	switch strings.ToLower(data[0]) {
 	case "ping":
-		if len(data) != 1 {
-			return errors.New("incorrect number of arguments for the ping command")
-		}
-		_, err = readWriter.WriteString(SerializeSimpleString("PONG"))
+		err = ProcessPingRequest(readWriter, data)
 		if err != nil {
 			return err
 		}
 	case "echo":
-		if len(data) != 2 {
-			return errors.New("incorrect number of arguments for the echo command")
-		}
-		fmt.Printf("echoing \"%s\"\n", data[1])
-		_, err = readWriter.WriteString(SerializeBulkString(data[1]))
+		err = ProcessEchoRequest(readWriter, data)
 		if err != nil {
 			return err
 		}
 	case "get":
-		if len(data) != 2 {
-			return errors.New("incorrect number of arguments for the set command")
+		err = ProcessGetRequest(readWriter, data)
+		if err != nil {
+			return err
 		}
-		val, ok := store.Get(data[1])
-		if !ok {
-			_, err = readWriter.WriteString(SerializeBulkString("-1"))
-			if err != nil {
-				return err
-			}
-		}
-		_, err = readWriter.WriteString(SerializeBulkString(val))
 	case "set":
-		if len(data) != 3 {
-			return errors.New("incorrect number of arguments for the get command")
-		}
-		store.Set(data[1], data[2])
-		_, err = readWriter.WriteString(SerializeSimpleString("OK"))
+		err = ProcessSetRequest(readWriter, data)
 		if err != nil {
 			return err
 		}
