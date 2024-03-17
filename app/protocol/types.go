@@ -6,7 +6,7 @@ import (
 )
 
 func DeserializeSimpleString(s string) (string, error) {
-	ret := s[1 : len(s)-2]
+	ret := s[1:]
 	return ret, nil
 }
 func SerializeSimpleString(s string) string {
@@ -14,7 +14,7 @@ func SerializeSimpleString(s string) string {
 	return v
 }
 func DeserializeSimpleError(s string) (string, error) {
-	ret := s[1 : len(s)-2]
+	ret := s[1:]
 	return ret, nil
 }
 func SerializeSimpleError(s string) string {

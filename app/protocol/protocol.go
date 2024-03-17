@@ -17,7 +17,7 @@ func nextString(readWriter *bufio.ReadWriter) (string, error) {
 	return s, nil
 }
 
-func HandleRequest(readWriter *bufio.ReadWriter) error {
+func handleRequest(readWriter *bufio.ReadWriter) error {
 	lead, err := nextString(readWriter)
 	if err != nil {
 		return err

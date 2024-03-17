@@ -1,12 +1,10 @@
 package main
 
 import (
-	"bufio"
 	"errors"
 	"flag"
 	"fmt"
-	"io"
-	"net"
+	"log"
 	"os"
 	"slices"
 	"strconv"
@@ -26,27 +24,20 @@ func main() {
 	port := flag.Int("port", 6379, "port of the instance")
 	masterAddr := flag.String("replicaof", "-1", "address of the master")
 	flag.Parse()
-	err := initReplicationState(masterAddr)
-
-	address := fmt.Sprintf("0.0.0.0:%d", *port)
-	listener, err := net.Listen("tcp", address)
+	server, err := initServer("0.0.0.0", *port, masterAddr)
 	if err != nil {
-		fmt.Println("failed to bind to port ", port)
-		os.Exit(1)
-	}
-	defer listener.Close()
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			fmt.Println("error accepting connection: ", err.Error())
-		}
-		go handleClient(conn)
+		log.Fatalf("couldn't initialize server: %s", err)
 	}
 
+	if err = server.Listen(); err != nil {
+		log.Fatal(fmt.Errorf("error while listening %s", err))
+	}
 }
 
-func initReplicationState(masterAddr *string) error {
-	var rsOpts []protocol.ReplicationStateOptFunc
+func initServer(addr string, port int, masterAddr *string) (*protocol.Server, error) {
+	rsOpts := []protocol.ServerOptFunc{
+		protocol.ListenOn(addr, port),
+	}
 
 	// is this instance a replica
 	if *masterAddr != "-1" {
@@ -58,43 +49,15 @@ func initReplicationState(masterAddr *string) error {
 		// no need to check
 
 		if len(args) <= replicaOfIdx+1 {
-			return errors.New("not enough arguments were given")
+			return nil, errors.New("not enough arguments were given")
 		}
 		masterPortStr := args[replicaOfIdx+1]
 		masterPort, err := strconv.Atoi(masterPortStr)
 		if err != nil {
-			return fmt.Errorf("given master port is invalid: %s", err)
+			return nil, fmt.Errorf("given master port is invalid: %s", err)
 		}
 		rsOpts = append(rsOpts, protocol.ReplicaOf(*masterAddr, masterPort))
 	}
 
-	protocol.InitReplicationState(rsOpts)
-	return nil
-}
-
-func handleClient(conn net.Conn) {
-	defer func() {
-		conn.Close()
-		fmt.Println("closing connection with client")
-	}()
-
-	r := bufio.NewReader(conn)
-	w := bufio.NewWriter(conn)
-	rw := bufio.NewReadWriter(r, w)
-	for {
-		err := protocol.HandleRequest(rw)
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				fmt.Printf("client disconnected")
-				return
-			}
-			fmt.Printf("couldn't handle request %s\n", err)
-		}
-	}
-}
-
-func WritePong(conn net.Conn) (int, error) {
-	pong := []byte("+PONG\r\n")
-	fmt.Println("writing pong")
-	return conn.Write(pong)
+	return protocol.NewServer(rsOpts)
 }
