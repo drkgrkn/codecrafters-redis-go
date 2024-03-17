@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func ProcessPingRequest(rw *bufio.ReadWriter, data []string) error {
+func processPingRequest(rw *bufio.ReadWriter, data []string) error {
 	if len(data) != 1 {
 		return errors.New("incorrect number of arguments for the ping command")
 	}
@@ -20,7 +20,7 @@ func ProcessPingRequest(rw *bufio.ReadWriter, data []string) error {
 	return nil
 }
 
-func ProcessEchoRequest(rw *bufio.ReadWriter, data []string) error {
+func processEchoRequest(rw *bufio.ReadWriter, data []string) error {
 	if len(data) != 2 {
 		return errors.New("incorrect number of arguments for the echo command")
 	}
@@ -32,7 +32,7 @@ func ProcessEchoRequest(rw *bufio.ReadWriter, data []string) error {
 	return nil
 }
 
-func ProcessGetRequest(rw *bufio.ReadWriter, data []string) error {
+func processGetRequest(rw *bufio.ReadWriter, data []string) error {
 	if len(data) != 2 {
 		return errors.New("incorrect number of arguments for the set command")
 	}
@@ -52,7 +52,7 @@ func ProcessGetRequest(rw *bufio.ReadWriter, data []string) error {
 	return nil
 }
 
-func ProcessSetRequest(rw *bufio.ReadWriter, data []string) error {
+func processSetRequest(rw *bufio.ReadWriter, data []string) error {
 	if len(data) != 3 && len(data) != 5 {
 		return errors.New("incorrect number of arguments for the get command")
 	}
@@ -74,6 +74,21 @@ func ProcessSetRequest(rw *bufio.ReadWriter, data []string) error {
 			store.SetWithTTL(data[1], data[2], time.Duration(dur)*time.Millisecond)
 		}
 		_, err := rw.WriteString(SerializeSimpleString("OK"))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func processInfoRequest(rw *bufio.ReadWriter, data []string) error {
+	if len(data) != 2 {
+		return errors.New("incorrect number of arguments for the info command")
+	}
+	if data[1] == "replication" {
+		var sb strings.Builder
+		sb.WriteString(fmt.Sprintf("role:%s\n", string(replicationState.Role())))
+		_, err := rw.WriteString(SerializeBulkString(sb.String()))
 		if err != nil {
 			return err
 		}

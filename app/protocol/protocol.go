@@ -42,22 +42,27 @@ func HandleRequest(readWriter *bufio.ReadWriter) error {
 	// command handling
 	switch strings.ToLower(data[0]) {
 	case "ping":
-		err = ProcessPingRequest(readWriter, data)
+		err = processPingRequest(readWriter, data)
 		if err != nil {
 			return err
 		}
 	case "echo":
-		err = ProcessEchoRequest(readWriter, data)
+		err = processEchoRequest(readWriter, data)
 		if err != nil {
 			return err
 		}
 	case "get":
-		err = ProcessGetRequest(readWriter, data)
+		err = processGetRequest(readWriter, data)
 		if err != nil {
 			return err
 		}
 	case "set":
-		err = ProcessSetRequest(readWriter, data)
+		err = processSetRequest(readWriter, data)
+		if err != nil {
+			return err
+		}
+	case "info":
+		err = processInfoRequest(readWriter, data)
 		if err != nil {
 			return err
 		}

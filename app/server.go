@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -51,7 +52,7 @@ func handleClient(conn net.Conn) {
 	for {
 		err := protocol.HandleRequest(rw)
 		if err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				fmt.Printf("client disconnected")
 				return
 			}
