@@ -99,3 +99,15 @@ func processInfoRequest(rw *bufio.ReadWriter, data []string) error {
 	}
 	return nil
 }
+
+func processReplConfRequest(rw *bufio.ReadWriter, data []string) error {
+	if len(data) != 3 {
+		return errors.New("incorrect number of arguments for the replconf command")
+	}
+	_, err := rw.WriteString(SerializeSimpleString("OK"))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}

@@ -66,6 +66,11 @@ func handleRequest(readWriter *bufio.ReadWriter) error {
 		if err != nil {
 			return err
 		}
+	case "replconf":
+		err = processReplConfRequest(readWriter, data)
+		if err != nil {
+			return err
+		}
 	}
 	err = readWriter.Flush()
 	if err != nil {
