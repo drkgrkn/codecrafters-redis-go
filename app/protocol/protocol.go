@@ -71,6 +71,11 @@ func handleRequest(readWriter *bufio.ReadWriter) error {
 		if err != nil {
 			return err
 		}
+	case "psync":
+		err = processPsyncRequest(readWriter, data)
+		if err != nil {
+			return err
+		}
 	}
 	err = readWriter.Flush()
 	if err != nil {
