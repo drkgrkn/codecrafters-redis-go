@@ -87,12 +87,10 @@ func processInfoRequest(rw *bufio.ReadWriter, data []string) error {
 	}
 	if data[1] == "replication" {
 		var sb strings.Builder
-		sb.WriteString(fmt.Sprintf("role:%s\n", string(replicationState.Role())))
-		if masterRepliID := replicationState.MasterReplicationID(); masterRepliID != nil {
-			sb.WriteString(fmt.Sprintf("master_replid:%s\n", *masterRepliID))
-		}
-		if masterRepliOffset := replicationState.MasterReplicationOffset(); masterRepliOffset != nil {
-			sb.WriteString(fmt.Sprintf("master_repl_offset:%d\n", *masterRepliOffset))
+		sb.WriteString(fmt.Sprintf("role:%s\n", string(replicationState.role)))
+		if replicationState.role == Master {
+			sb.WriteString(fmt.Sprintf("master_replid:%s\n", replicationState.masterState.repliID))
+			sb.WriteString(fmt.Sprintf("master_repl_offset:%d\n", replicationState.masterState.replOffset))
 		}
 		_, err := rw.WriteString(SerializeBulkString(sb.String()))
 		if err != nil {

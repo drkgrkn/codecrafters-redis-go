@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"fmt"
+	"strings"
 )
 
 func DeserializeSimpleString(s string) (string, error) {
@@ -29,4 +30,12 @@ func SerializeBulkString(s string) string {
 }
 func SerializeNullBulkString() string {
 	return "$-1\r\n"
+}
+func SerializeArray(elements ...string) string {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("*%d\r\n", len(elements)))
+	for _, str := range elements {
+		sb.WriteString(str)
+	}
+	return sb.String()
 }
