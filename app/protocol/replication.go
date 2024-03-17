@@ -11,8 +11,24 @@ type ReplicationState struct {
 	role Role
 }
 
-var replicationState ReplicationState = ReplicationState{
-	role: Master,
+type ReplicationStateOptFunc func(*ReplicationState)
+
+func ReplicaOf(address string, port int) ReplicationStateOptFunc {
+	return func(rs *ReplicationState) {
+		rs.role = Slave
+	}
+}
+
+var replicationState ReplicationState
+
+func InitReplicationState(opts []ReplicationStateOptFunc) error {
+	replicationState = ReplicationState{
+		role: Master,
+	}
+	for _, f := range opts {
+		f(&replicationState)
+	}
+	return nil
 }
 
 func (rs ReplicationState) Role() Role {

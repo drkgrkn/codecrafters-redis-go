@@ -8,6 +8,8 @@ import (
 	"io"
 	"net"
 	"os"
+	"slices"
+	"strconv"
 
 	"github.com/codecrafters-io/redis-starter-go/app/protocol"
 )
@@ -20,8 +22,11 @@ const (
 func main() {
 	// You can use print statements as follows for debugging, they'll be visible when running tests.
 	fmt.Println("logs from your program will appear here!")
+
 	port := flag.Int("port", 6379, "port of the instance")
+	masterAddr := flag.String("replicaof", "-1", "address of the master")
 	flag.Parse()
+	err := initReplicationState(masterAddr)
 
 	address := fmt.Sprintf("0.0.0.0:%d", *port)
 	listener, err := net.Listen("tcp", address)
@@ -38,6 +43,33 @@ func main() {
 		go handleClient(conn)
 	}
 
+}
+
+func initReplicationState(masterAddr *string) error {
+	var rsOpts []protocol.ReplicationStateOptFunc
+
+	// is this instance a replica
+	if *masterAddr != "-1" {
+		args := os.Args
+		replicaOfIdx := slices.IndexFunc(args, func(arg string) bool {
+			return arg == *masterAddr
+		})
+		// replicaOfIdx cannot be -1 as masterAddr is not -1
+		// no need to check
+
+		if len(args) <= replicaOfIdx+1 {
+			return errors.New("not enough arguments were given")
+		}
+		masterPortStr := args[replicaOfIdx+1]
+		masterPort, err := strconv.Atoi(masterPortStr)
+		if err != nil {
+			return fmt.Errorf("given master port is invalid: %s", err)
+		}
+		rsOpts = append(rsOpts, protocol.ReplicaOf(*masterAddr, masterPort))
+	}
+
+	protocol.InitReplicationState(rsOpts)
+	return nil
 }
 
 func handleClient(conn net.Conn) {
