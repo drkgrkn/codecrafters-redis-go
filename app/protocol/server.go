@@ -141,7 +141,11 @@ func (s *Server) handshakeMaster() error {
 	if err != nil {
 		return fmt.Errorf("error while pinging master: %s", err)
 	}
-	err = server.configureReplication(rw)
+	err = server.configureReplicationWithMaster(rw)
+	if err != nil {
+		return fmt.Errorf("error while configuring replication with master: %s", err)
+	}
+	err = server.psyncWithMaster(rw)
 	if err != nil {
 		return fmt.Errorf("error while configuring replication with master: %s", err)
 	}
@@ -172,7 +176,7 @@ func (s *Server) pingMaster(rw *bufio.ReadWriter) error {
 	return nil
 }
 
-func (s *Server) configureReplication(rw *bufio.ReadWriter) error {
+func (s *Server) configureReplicationWithMaster(rw *bufio.ReadWriter) error {
 	rw.WriteString(SerializeArray(
 		SerializeBulkString("REPLCONF"),
 		SerializeBulkString("listening-port"),
@@ -208,6 +212,25 @@ func (s *Server) configureReplication(rw *bufio.ReadWriter) error {
 	if err != nil || strings.ToLower(ok) != "ok" {
 		return fmt.Errorf("expected master to reply ok got %s", ok)
 	}
+
+	return nil
+}
+
+func (s *Server) psyncWithMaster(rw *bufio.ReadWriter) error {
+	rw.WriteString(SerializeArray(
+		SerializeBulkString("PSYNC"),
+		SerializeBulkString(fmt.Sprintf("?")),
+		SerializeBulkString(fmt.Sprintf("-1")),
+	))
+	err := rw.Flush()
+	if err != nil {
+		return err
+	}
+	resp, err := nextString(rw)
+	if err != nil {
+		return fmt.Errorf("master didn't respond to REPLCONF: %s", err)
+	}
+	_, err = DeserializeSimpleString(resp)
 
 	return nil
 }
