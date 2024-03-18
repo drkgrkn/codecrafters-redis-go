@@ -17,8 +17,6 @@ func NewStore() *Store {
 	}
 }
 
-var store *Store = NewStore()
-
 func (store *Store) Set(key, val string) {
 	store.lock.Lock()
 	defer store.lock.Unlock()

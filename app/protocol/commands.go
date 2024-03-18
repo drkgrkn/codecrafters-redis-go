@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"net"
 	"strconv"
 	"strings"
 	"time"
@@ -36,7 +37,7 @@ func (s *Server) processGetRequest(rw *bufio.ReadWriter, data []string) error {
 	if len(data) != 2 {
 		return errors.New("incorrect number of arguments for the set command")
 	}
-	val, ok := store.Get(data[1])
+	val, ok := s.store.Get(data[1])
 	if !ok {
 		_, err := rw.WriteString(SerializeNullBulkString())
 		if err != nil {
@@ -59,8 +60,11 @@ func (s *Server) processSetRequest(rw *bufio.ReadWriter, data []string) error {
 
 	if len(data) == 3 {
 		fmt.Printf("setting key %s val %s\n", data[1], data[2])
-		store.Set(data[1], data[2])
-		_, err := rw.WriteString(SerializeSimpleString("OK"))
+		err := s.Set(data[1], data[2])
+		if err != nil {
+			return err
+		}
+		_, err = rw.WriteString(SerializeSimpleString("OK"))
 		if err != nil {
 			return err
 		}
@@ -71,7 +75,7 @@ func (s *Server) processSetRequest(rw *bufio.ReadWriter, data []string) error {
 				return err
 			}
 			fmt.Printf("setting key %s val %s for %d ms\n", data[1], data[2], dur)
-			store.SetWithTTL(data[1], data[2], time.Duration(dur)*time.Millisecond)
+			s.store.SetWithTTL(data[1], data[2], time.Duration(dur)*time.Millisecond)
 		}
 		_, err := rw.WriteString(SerializeSimpleString("OK"))
 		if err != nil {
@@ -87,10 +91,12 @@ func (s *Server) processInfoRequest(rw *bufio.ReadWriter, data []string) error {
 	}
 	if data[1] == "replication" {
 		var sb strings.Builder
-		sb.WriteString(fmt.Sprintf("role:%s\n", string(s.role)))
-		if s.role == Master {
+		if s.masterConfig != nil {
+			sb.WriteString(fmt.Sprintf("role:%s\n", "master"))
 			sb.WriteString(fmt.Sprintf("master_replid:%s\n", s.masterConfig.repliID))
 			sb.WriteString(fmt.Sprintf("master_repl_offset:%d\n", s.masterConfig.replOffset))
+		} else {
+			sb.WriteString(fmt.Sprintf("role:%s\n", "slave"))
 		}
 		_, err := rw.WriteString(SerializeBulkString(sb.String()))
 		if err != nil {
@@ -104,7 +110,12 @@ func (s *Server) processReplConfRequest(rw *bufio.ReadWriter, data []string) err
 	if len(data) != 3 {
 		return errors.New("incorrect number of arguments for the replconf command")
 	}
+
 	_, err := rw.WriteString(SerializeSimpleString("OK"))
+	if err != nil {
+		return err
+	}
+	err = rw.Flush()
 	if err != nil {
 		return err
 	}
@@ -112,7 +123,7 @@ func (s *Server) processReplConfRequest(rw *bufio.ReadWriter, data []string) err
 	return nil
 }
 
-func (s *Server) processPsyncRequest(rw *bufio.ReadWriter, data []string) error {
+func (s *Server) processPsyncRequest(rw *bufio.ReadWriter, data []string, conn net.Conn) error {
 	if len(data) != 3 {
 		return errors.New("incorrect number of arguments for the psync command")
 	}
@@ -133,6 +144,8 @@ func (s *Server) processPsyncRequest(rw *bufio.ReadWriter, data []string) error 
 	if err != nil {
 		return err
 	}
+
+	s.masterConfig.slaves = append(s.masterConfig.slaves, &conn)
 
 	return nil
 }

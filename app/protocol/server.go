@@ -9,32 +9,29 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/codecrafters-io/redis-starter-go/app/utils"
+	"github.com/codecrafters-io/redis-starter-go/app/common"
 )
 
 type Role string
 
-const (
-	Master Role = "master"
-	Slave  Role = "slave"
-)
-
 type Server struct {
-	role         Role
-	addr         string
-	port         int
+	store *Store
+
+	addr string
+	port int
+
 	masterConfig *masterConfig
-	slaveConfig  *slaveConfig
+	slaveConfig  *other
+}
+
+type other struct {
+	addr string
 }
 
 type masterConfig struct {
 	repliID    string
 	replOffset int
-}
-
-type slaveConfig struct {
-	masterAddr string
-	masterPort int
+	slaves     []*net.Conn
 }
 
 type ServerOptFunc func(*Server)
@@ -47,20 +44,18 @@ func WithAddressAndPort(address string, port int) ServerOptFunc {
 }
 func WithMasterAs(address string, port int) ServerOptFunc {
 	return func(rs *Server) {
-		rs.role = Slave
 		rs.masterConfig = nil
-		rs.slaveConfig = &slaveConfig{
-			masterAddr: address,
-			masterPort: port,
+		rs.slaveConfig = &other{
+			addr: fmt.Sprintf("%s:%d", address, port),
 		}
 	}
 }
 
 func NewServer(opts []ServerOptFunc) (*Server, error) {
-	repliID := utils.RandomString(40)
+	repliID := common.RandomString(40)
 	repliOffset := 0
 	server := &Server{
-		role: Master,
+		store: NewStore(),
 		masterConfig: &masterConfig{
 			repliID:    repliID,
 			replOffset: repliOffset,
@@ -71,7 +66,7 @@ func NewServer(opts []ServerOptFunc) (*Server, error) {
 		f(server)
 	}
 
-	if server.role == Slave {
+	if server.slaveConfig != nil {
 		go func() {
 			err := server.handshakeMaster()
 			if err != nil {
@@ -103,15 +98,11 @@ func (s *Server) handleClient(conn net.Conn) {
 		conn.Close()
 		fmt.Println("closing connection with client")
 	}()
-
-	r := bufio.NewReader(conn)
-	w := bufio.NewWriter(conn)
-	rw := bufio.NewReadWriter(r, w)
 	for {
-		err := s.handleRequest(rw)
+		err := s.handleRequest(conn)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				fmt.Printf("client disconnected")
+				fmt.Println("client disconnected")
 				return
 			}
 			fmt.Printf("couldn't handle request %s\n", err)
@@ -119,8 +110,11 @@ func (s *Server) handleClient(conn net.Conn) {
 	}
 }
 
-func (s *Server) handleRequest(readWriter *bufio.ReadWriter) error {
-	lead, err := nextString(readWriter)
+func (s *Server) handleRequest(conn net.Conn) error {
+	r := bufio.NewReader(conn)
+	w := bufio.NewWriter(conn)
+	rw := bufio.NewReadWriter(r, w)
+	lead, err := nextString(rw)
 	if err != nil {
 		return err
 	}
@@ -135,7 +129,7 @@ func (s *Server) handleRequest(readWriter *bufio.ReadWriter) error {
 	data := make([]string, arrLength)
 	// Parse request command
 	for i := 0; i < arrLength; i++ {
-		data[i], err = parseWord(readWriter)
+		data[i], err = parseWord(rw)
 		if err != nil {
 			return err
 		}
@@ -144,46 +138,46 @@ func (s *Server) handleRequest(readWriter *bufio.ReadWriter) error {
 	// command handling
 	switch strings.ToLower(data[0]) {
 	case "ping":
-		err = s.processPingRequest(readWriter, data)
+		err = s.processPingRequest(rw, data)
 		if err != nil {
 			return err
 		}
 	case "echo":
-		err = s.processEchoRequest(readWriter, data)
+		err = s.processEchoRequest(rw, data)
 		if err != nil {
 			return err
 		}
 	case "get":
-		err = s.processGetRequest(readWriter, data)
+		err = s.processGetRequest(rw, data)
 		if err != nil {
 			return err
 		}
 	case "set":
-		err = s.processSetRequest(readWriter, data)
+		err = s.processSetRequest(rw, data)
 		if err != nil {
 			return err
 		}
 	case "info":
-		err = s.processInfoRequest(readWriter, data)
+		err = s.processInfoRequest(rw, data)
 		if err != nil {
 			return err
 		}
 	case "replconf":
-		err = s.processReplConfRequest(readWriter, data)
+		err = s.processReplConfRequest(rw, data)
 		if err != nil {
 			return err
 		}
 	case "psync":
-		err = s.processPsyncRequest(readWriter, data)
+		err = s.processPsyncRequest(rw, data, conn)
 		if err != nil {
 			return err
 		}
 	}
-	err = readWriter.Flush()
+	err = rw.Flush()
 	if err != nil {
 		return err
 	}
-	return readWriter.Writer.Flush()
+	return rw.Writer.Flush()
 }
 
 // handshake goes as:
@@ -198,7 +192,6 @@ func (s *Server) handshakeMaster() error {
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
 	r := bufio.NewReader(conn)
 	w := bufio.NewWriter(conn)
 	rw := bufio.NewReadWriter(r, w)
@@ -220,7 +213,7 @@ func (s *Server) handshakeMaster() error {
 }
 
 func (s *Server) dial() (net.Conn, error) {
-	return net.Dial("tcp", fmt.Sprintf("%s:%d", s.slaveConfig.masterAddr, s.slaveConfig.masterPort))
+	return net.Dial("tcp", fmt.Sprintf("%s", s.slaveConfig.addr))
 }
 
 func (s *Server) pingMaster(rw *bufio.ReadWriter) error {
@@ -309,6 +302,38 @@ func (s *Server) psyncWithMaster(rw *bufio.ReadWriter) error {
 		return fmt.Errorf("master didn't respond to REPLCONF: %s", err)
 	}
 	_, err = DeserializeSimpleString(resp)
+
+	return nil
+}
+
+func (s *Server) Set(key, val string) error {
+	s.store.Set(key, val)
+	if s.masterConfig != nil {
+		for _, conn := range s.masterConfig.slaves {
+			command := fmt.Sprintf("\"%s %s %s\"", "SET", key, val)
+			addr := (*conn).RemoteAddr().String()
+			fmt.Printf("syncing with slave %s, command: %s\n", addr, command)
+
+			rw := common.ReadWriterFrom(*conn)
+			_, err := rw.WriteString(SerializeArray(
+				SerializeBulkString("SET"),
+				SerializeBulkString(key),
+				SerializeBulkString(val),
+			))
+			if err != nil {
+				return fmt.Errorf(
+					"failure while propagating %s command to replica %s, error: %s",
+					command, addr, err)
+			}
+
+			err = rw.Flush()
+			if err != nil {
+				return fmt.Errorf(
+					"failure while propagating %s command to replica %s, error: %s",
+					command, addr, err)
+			}
+		}
+	}
 
 	return nil
 }
