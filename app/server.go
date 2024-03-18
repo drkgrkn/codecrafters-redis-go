@@ -36,7 +36,7 @@ func main() {
 
 func initServer(addr string, port int, masterAddr *string) (*protocol.Server, error) {
 	rsOpts := []protocol.ServerOptFunc{
-		protocol.ListenOn(addr, port),
+		protocol.WithAddressAndPort(addr, port),
 	}
 
 	// is this instance a replica
@@ -56,7 +56,7 @@ func initServer(addr string, port int, masterAddr *string) (*protocol.Server, er
 		if err != nil {
 			return nil, fmt.Errorf("given master port is invalid: %s", err)
 		}
-		rsOpts = append(rsOpts, protocol.ReplicaOf(*masterAddr, masterPort))
+		rsOpts = append(rsOpts, protocol.WithMasterAs(*masterAddr, masterPort))
 	}
 
 	return protocol.NewServer(rsOpts)

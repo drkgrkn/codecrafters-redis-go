@@ -17,7 +17,7 @@ func nextString(readWriter *bufio.ReadWriter) (string, error) {
 	return s, nil
 }
 
-func handleRequest(readWriter *bufio.ReadWriter) error {
+func (s *Server) handleRequest(readWriter *bufio.ReadWriter) error {
 	lead, err := nextString(readWriter)
 	if err != nil {
 		return err
@@ -42,37 +42,37 @@ func handleRequest(readWriter *bufio.ReadWriter) error {
 	// command handling
 	switch strings.ToLower(data[0]) {
 	case "ping":
-		err = processPingRequest(readWriter, data)
+		err = s.processPingRequest(readWriter, data)
 		if err != nil {
 			return err
 		}
 	case "echo":
-		err = processEchoRequest(readWriter, data)
+		err = s.processEchoRequest(readWriter, data)
 		if err != nil {
 			return err
 		}
 	case "get":
-		err = processGetRequest(readWriter, data)
+		err = s.processGetRequest(readWriter, data)
 		if err != nil {
 			return err
 		}
 	case "set":
-		err = processSetRequest(readWriter, data)
+		err = s.processSetRequest(readWriter, data)
 		if err != nil {
 			return err
 		}
 	case "info":
-		err = processInfoRequest(readWriter, data)
+		err = s.processInfoRequest(readWriter, data)
 		if err != nil {
 			return err
 		}
 	case "replconf":
-		err = processReplConfRequest(readWriter, data)
+		err = s.processReplConfRequest(readWriter, data)
 		if err != nil {
 			return err
 		}
 	case "psync":
-		err = processPsyncRequest(readWriter, data)
+		err = s.processPsyncRequest(readWriter, data)
 		if err != nil {
 			return err
 		}

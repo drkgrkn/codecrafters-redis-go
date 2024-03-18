@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func processPingRequest(rw *bufio.ReadWriter, data []string) error {
+func (s *Server) processPingRequest(rw *bufio.ReadWriter, data []string) error {
 	if len(data) != 1 {
 		return errors.New("incorrect number of arguments for the ping command")
 	}
@@ -20,7 +20,7 @@ func processPingRequest(rw *bufio.ReadWriter, data []string) error {
 	return nil
 }
 
-func processEchoRequest(rw *bufio.ReadWriter, data []string) error {
+func (s *Server) processEchoRequest(rw *bufio.ReadWriter, data []string) error {
 	if len(data) != 2 {
 		return errors.New("incorrect number of arguments for the echo command")
 	}
@@ -32,7 +32,7 @@ func processEchoRequest(rw *bufio.ReadWriter, data []string) error {
 	return nil
 }
 
-func processGetRequest(rw *bufio.ReadWriter, data []string) error {
+func (s *Server) processGetRequest(rw *bufio.ReadWriter, data []string) error {
 	if len(data) != 2 {
 		return errors.New("incorrect number of arguments for the set command")
 	}
@@ -52,7 +52,7 @@ func processGetRequest(rw *bufio.ReadWriter, data []string) error {
 	return nil
 }
 
-func processSetRequest(rw *bufio.ReadWriter, data []string) error {
+func (s *Server) processSetRequest(rw *bufio.ReadWriter, data []string) error {
 	if len(data) != 3 && len(data) != 5 {
 		return errors.New("incorrect number of arguments for the get command")
 	}
@@ -81,16 +81,16 @@ func processSetRequest(rw *bufio.ReadWriter, data []string) error {
 	return nil
 }
 
-func processInfoRequest(rw *bufio.ReadWriter, data []string) error {
+func (s *Server) processInfoRequest(rw *bufio.ReadWriter, data []string) error {
 	if len(data) != 2 {
 		return errors.New("incorrect number of arguments for the info command")
 	}
 	if data[1] == "replication" {
 		var sb strings.Builder
-		sb.WriteString(fmt.Sprintf("role:%s\n", string(server.role)))
-		if server.role == Master {
-			sb.WriteString(fmt.Sprintf("master_replid:%s\n", server.masterState.repliID))
-			sb.WriteString(fmt.Sprintf("master_repl_offset:%d\n", server.masterState.replOffset))
+		sb.WriteString(fmt.Sprintf("role:%s\n", string(s.role)))
+		if s.role == Master {
+			sb.WriteString(fmt.Sprintf("master_replid:%s\n", s.masterState.repliID))
+			sb.WriteString(fmt.Sprintf("master_repl_offset:%d\n", s.masterState.replOffset))
 		}
 		_, err := rw.WriteString(SerializeBulkString(sb.String()))
 		if err != nil {
@@ -100,7 +100,7 @@ func processInfoRequest(rw *bufio.ReadWriter, data []string) error {
 	return nil
 }
 
-func processReplConfRequest(rw *bufio.ReadWriter, data []string) error {
+func (s *Server) processReplConfRequest(rw *bufio.ReadWriter, data []string) error {
 	if len(data) != 3 {
 		return errors.New("incorrect number of arguments for the replconf command")
 	}
@@ -112,15 +112,15 @@ func processReplConfRequest(rw *bufio.ReadWriter, data []string) error {
 	return nil
 }
 
-func processPsyncRequest(rw *bufio.ReadWriter, data []string) error {
+func (s *Server) processPsyncRequest(rw *bufio.ReadWriter, data []string) error {
 	if len(data) != 3 {
 		return errors.New("incorrect number of arguments for the psync command")
 	}
 	_, err := rw.WriteString(SerializeSimpleString(
 		fmt.Sprintf(
 			"FULLRESYNC %s %d",
-			server.masterState.repliID,
-			server.masterState.replOffset,
+			s.masterState.repliID,
+			s.masterState.replOffset,
 		),
 	))
 	if err != nil {

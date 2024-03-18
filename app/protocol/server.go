@@ -38,13 +38,13 @@ type slaveConfig struct {
 
 type ServerOptFunc func(*Server)
 
-func ListenOn(address string, port int) ServerOptFunc {
+func WithAddressAndPort(address string, port int) ServerOptFunc {
 	return func(rs *Server) {
 		rs.addr = address
 		rs.port = port
 	}
 }
-func ReplicaOf(address string, port int) ServerOptFunc {
+func WithMasterAs(address string, port int) ServerOptFunc {
 	return func(rs *Server) {
 		rs.role = Slave
 		rs.masterState = nil
@@ -66,11 +66,11 @@ func (s *Server) Listen() error {
 		if err != nil {
 			fmt.Println("error accepting connection: ", err.Error())
 		}
-		go handleClient(conn)
+		go s.handleClient(conn)
 	}
 }
 
-func handleClient(conn net.Conn) {
+func (s *Server) handleClient(conn net.Conn) {
 	defer func() {
 		conn.Close()
 		fmt.Println("closing connection with client")
@@ -80,7 +80,7 @@ func handleClient(conn net.Conn) {
 	w := bufio.NewWriter(conn)
 	rw := bufio.NewReadWriter(r, w)
 	for {
-		err := handleRequest(rw)
+		err := s.handleRequest(rw)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				fmt.Printf("client disconnected")
@@ -91,12 +91,10 @@ func handleClient(conn net.Conn) {
 	}
 }
 
-var server Server
-
 func NewServer(opts []ServerOptFunc) (*Server, error) {
 	repliID := utils.RandomString(40)
 	repliOffset := 0
-	server = Server{
+	server := &Server{
 		role: Master,
 		masterState: &masterConfig{
 			repliID:    repliID,
@@ -105,7 +103,7 @@ func NewServer(opts []ServerOptFunc) (*Server, error) {
 		slaveState: nil,
 	}
 	for _, f := range opts {
-		f(&server)
+		f(server)
 	}
 
 	if server.role == Slave {
@@ -117,7 +115,7 @@ func NewServer(opts []ServerOptFunc) (*Server, error) {
 		}()
 	}
 
-	return &server, nil
+	return server, nil
 }
 
 // handshake goes as:
@@ -137,15 +135,15 @@ func (s *Server) handshakeMaster() error {
 	w := bufio.NewWriter(conn)
 	rw := bufio.NewReadWriter(r, w)
 
-	err = server.pingMaster(rw)
+	err = s.pingMaster(rw)
 	if err != nil {
 		return fmt.Errorf("error while pinging master: %s", err)
 	}
-	err = server.configureReplicationWithMaster(rw)
+	err = s.configureReplicationWithMaster(rw)
 	if err != nil {
 		return fmt.Errorf("error while configuring replication with master: %s", err)
 	}
-	err = server.psyncWithMaster(rw)
+	err = s.psyncWithMaster(rw)
 	if err != nil {
 		return fmt.Errorf("error while configuring replication with master: %s", err)
 	}
