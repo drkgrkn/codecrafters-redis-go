@@ -18,7 +18,8 @@ func (s *Server) processPingRequest(rw *bufio.ReadWriter, data []string) error {
 	if err != nil {
 		return err
 	}
-	return nil
+	err = rw.Flush()
+	return err
 }
 
 func (s *Server) processEchoRequest(rw *bufio.ReadWriter, data []string) error {
@@ -30,7 +31,8 @@ func (s *Server) processEchoRequest(rw *bufio.ReadWriter, data []string) error {
 	if err != nil {
 		return err
 	}
-	return nil
+	err = rw.Flush()
+	return err
 }
 
 func (s *Server) processGetRequest(rw *bufio.ReadWriter, data []string) error {
@@ -43,14 +45,14 @@ func (s *Server) processGetRequest(rw *bufio.ReadWriter, data []string) error {
 		if err != nil {
 			return err
 		}
-		return nil
+	} else {
+		_, err := rw.WriteString(SerializeBulkString(val))
+		if err != nil {
+			return err
+		}
 	}
-
-	_, err := rw.WriteString(SerializeBulkString(val))
-	if err != nil {
-		return err
-	}
-	return nil
+	err := rw.Flush()
+	return err
 }
 
 func (s *Server) processSetRequest(rw *bufio.ReadWriter, data []string) error {
@@ -62,7 +64,7 @@ func (s *Server) processSetRequest(rw *bufio.ReadWriter, data []string) error {
 		fmt.Printf("setting key %s val %s\n", data[1], data[2])
 		err := s.Set(data[1], data[2])
 		if err != nil {
-			return err
+			fmt.Printf("error while propogating set command: %s", err)
 		}
 		_, err = rw.WriteString(SerializeSimpleString("OK"))
 		if err != nil {
@@ -82,7 +84,8 @@ func (s *Server) processSetRequest(rw *bufio.ReadWriter, data []string) error {
 			return err
 		}
 	}
-	return nil
+	err := rw.Flush()
+	return err
 }
 
 func (s *Server) processInfoRequest(rw *bufio.ReadWriter, data []string) error {
@@ -103,7 +106,8 @@ func (s *Server) processInfoRequest(rw *bufio.ReadWriter, data []string) error {
 			return err
 		}
 	}
-	return nil
+	err := rw.Flush()
+	return err
 }
 
 func (s *Server) processReplConfRequest(rw *bufio.ReadWriter, data []string) error {
@@ -116,11 +120,7 @@ func (s *Server) processReplConfRequest(rw *bufio.ReadWriter, data []string) err
 		return err
 	}
 	err = rw.Flush()
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 func (s *Server) processPsyncRequest(rw *bufio.ReadWriter, data []string, conn net.Conn) error {
@@ -136,7 +136,7 @@ func (s *Server) processPsyncRequest(rw *bufio.ReadWriter, data []string, conn n
 		return err
 	}
 
-	_, err = rw.WriteString(strings.TrimRight(SerializeBulkString(getEmptyRDBFileBinary()), "\r\n"))
+	_, err = rw.WriteString(strings.TrimSuffix(SerializeBulkString(getEmptyRDBFileBinary()), "\r\n"))
 	if err != nil {
 		return err
 	}
@@ -145,7 +145,9 @@ func (s *Server) processPsyncRequest(rw *bufio.ReadWriter, data []string, conn n
 		return err
 	}
 
-	s.masterConfig.slaves = append(s.masterConfig.slaves, &conn)
+	s.masterConfig.lock.Lock()
+	defer s.masterConfig.lock.Unlock()
+	s.masterConfig.slaves = append(s.masterConfig.slaves, conn)
 
 	return nil
 }
