@@ -105,7 +105,7 @@ func (s *Server) handleClient(conn net.Conn) {
 				fmt.Println("client disconnected")
 				return
 			}
-			fmt.Printf("couldn't handle request %s\n", err)
+			fmt.Printf("error with request %s\n", err)
 		}
 	}
 }
