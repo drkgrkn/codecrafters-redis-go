@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strconv"
 	"strings"
 
 	"github.com/codecrafters-io/redis-starter-go/app/utils"
@@ -19,11 +20,11 @@ const (
 )
 
 type Server struct {
-	role        Role
-	addr        string
-	port        int
-	masterState *masterConfig
-	slaveState  *slaveConfig
+	role         Role
+	addr         string
+	port         int
+	masterConfig *masterConfig
+	slaveConfig  *slaveConfig
 }
 
 type masterConfig struct {
@@ -47,12 +48,39 @@ func WithAddressAndPort(address string, port int) ServerOptFunc {
 func WithMasterAs(address string, port int) ServerOptFunc {
 	return func(rs *Server) {
 		rs.role = Slave
-		rs.masterState = nil
-		rs.slaveState = &slaveConfig{
+		rs.masterConfig = nil
+		rs.slaveConfig = &slaveConfig{
 			masterAddr: address,
 			masterPort: port,
 		}
 	}
+}
+
+func NewServer(opts []ServerOptFunc) (*Server, error) {
+	repliID := utils.RandomString(40)
+	repliOffset := 0
+	server := &Server{
+		role: Master,
+		masterConfig: &masterConfig{
+			repliID:    repliID,
+			replOffset: repliOffset,
+		},
+		slaveConfig: nil,
+	}
+	for _, f := range opts {
+		f(server)
+	}
+
+	if server.role == Slave {
+		go func() {
+			err := server.handshakeMaster()
+			if err != nil {
+				fmt.Printf("handshake with master failed, %s", err)
+			}
+		}()
+	}
+
+	return server, nil
 }
 
 func (s *Server) Listen() error {
@@ -91,31 +119,71 @@ func (s *Server) handleClient(conn net.Conn) {
 	}
 }
 
-func NewServer(opts []ServerOptFunc) (*Server, error) {
-	repliID := utils.RandomString(40)
-	repliOffset := 0
-	server := &Server{
-		role: Master,
-		masterState: &masterConfig{
-			repliID:    repliID,
-			replOffset: repliOffset,
-		},
-		slaveState: nil,
+func (s *Server) handleRequest(readWriter *bufio.ReadWriter) error {
+	lead, err := nextString(readWriter)
+	if err != nil {
+		return err
 	}
-	for _, f := range opts {
-		f(server)
+	// Parse number of arguments
+	if lead[0] != '*' {
+		return errors.New("Leading command string should be array")
 	}
-
-	if server.role == Slave {
-		go func() {
-			err := server.handshakeMaster()
-			if err != nil {
-				fmt.Printf("handshake with master failed, %s", err)
-			}
-		}()
+	arrLength, err := strconv.Atoi(lead[1:])
+	if err != nil {
+		return err
 	}
-
-	return server, nil
+	data := make([]string, arrLength)
+	// Parse request command
+	for i := 0; i < arrLength; i++ {
+		data[i], err = parseWord(readWriter)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("data in command %d, %s\n", i, data[i])
+	}
+	// command handling
+	switch strings.ToLower(data[0]) {
+	case "ping":
+		err = s.processPingRequest(readWriter, data)
+		if err != nil {
+			return err
+		}
+	case "echo":
+		err = s.processEchoRequest(readWriter, data)
+		if err != nil {
+			return err
+		}
+	case "get":
+		err = s.processGetRequest(readWriter, data)
+		if err != nil {
+			return err
+		}
+	case "set":
+		err = s.processSetRequest(readWriter, data)
+		if err != nil {
+			return err
+		}
+	case "info":
+		err = s.processInfoRequest(readWriter, data)
+		if err != nil {
+			return err
+		}
+	case "replconf":
+		err = s.processReplConfRequest(readWriter, data)
+		if err != nil {
+			return err
+		}
+	case "psync":
+		err = s.processPsyncRequest(readWriter, data)
+		if err != nil {
+			return err
+		}
+	}
+	err = readWriter.Flush()
+	if err != nil {
+		return err
+	}
+	return readWriter.Writer.Flush()
 }
 
 // handshake goes as:
@@ -152,14 +220,17 @@ func (s *Server) handshakeMaster() error {
 }
 
 func (s *Server) dial() (net.Conn, error) {
-	return net.Dial("tcp", fmt.Sprintf("%s:%d", s.slaveState.masterAddr, s.slaveState.masterPort))
+	return net.Dial("tcp", fmt.Sprintf("%s:%d", s.slaveConfig.masterAddr, s.slaveConfig.masterPort))
 }
 
 func (s *Server) pingMaster(rw *bufio.ReadWriter) error {
-	rw.WriteString(SerializeArray(
+	_, err := rw.WriteString(SerializeArray(
 		SerializeBulkString("PING"),
 	))
-	err := rw.Flush()
+	if err != nil {
+		return err
+	}
+	err = rw.Flush()
 	if err != nil {
 		return err
 	}
@@ -175,12 +246,15 @@ func (s *Server) pingMaster(rw *bufio.ReadWriter) error {
 }
 
 func (s *Server) configureReplicationWithMaster(rw *bufio.ReadWriter) error {
-	rw.WriteString(SerializeArray(
+	_, err := rw.WriteString(SerializeArray(
 		SerializeBulkString("REPLCONF"),
 		SerializeBulkString("listening-port"),
 		SerializeBulkString(fmt.Sprintf("%d", s.port)),
 	))
-	err := rw.Flush()
+	if err != nil {
+		return err
+	}
+	err = rw.Flush()
 	if err != nil {
 		return err
 	}
@@ -193,11 +267,14 @@ func (s *Server) configureReplicationWithMaster(rw *bufio.ReadWriter) error {
 		return fmt.Errorf("expected master to reply ok got %s", ok)
 	}
 
-	rw.WriteString(SerializeArray(
+	_, err = rw.WriteString(SerializeArray(
 		SerializeBulkString("REPLCONF"),
 		SerializeBulkString("capa"),
 		SerializeBulkString("psync2"),
 	))
+	if err != nil {
+		return err
+	}
 	err = rw.Flush()
 	if err != nil {
 		return err
@@ -215,12 +292,15 @@ func (s *Server) configureReplicationWithMaster(rw *bufio.ReadWriter) error {
 }
 
 func (s *Server) psyncWithMaster(rw *bufio.ReadWriter) error {
-	rw.WriteString(SerializeArray(
+	_, err := rw.WriteString(SerializeArray(
 		SerializeBulkString("PSYNC"),
 		SerializeBulkString(fmt.Sprintf("?")),
 		SerializeBulkString(fmt.Sprintf("-1")),
 	))
-	err := rw.Flush()
+	if err != nil {
+		return err
+	}
+	err = rw.Flush()
 	if err != nil {
 		return err
 	}

@@ -89,8 +89,8 @@ func (s *Server) processInfoRequest(rw *bufio.ReadWriter, data []string) error {
 		var sb strings.Builder
 		sb.WriteString(fmt.Sprintf("role:%s\n", string(s.role)))
 		if s.role == Master {
-			sb.WriteString(fmt.Sprintf("master_replid:%s\n", s.masterState.repliID))
-			sb.WriteString(fmt.Sprintf("master_repl_offset:%d\n", s.masterState.replOffset))
+			sb.WriteString(fmt.Sprintf("master_replid:%s\n", s.masterConfig.repliID))
+			sb.WriteString(fmt.Sprintf("master_repl_offset:%d\n", s.masterConfig.replOffset))
 		}
 		_, err := rw.WriteString(SerializeBulkString(sb.String()))
 		if err != nil {
@@ -116,13 +116,20 @@ func (s *Server) processPsyncRequest(rw *bufio.ReadWriter, data []string) error 
 	if len(data) != 3 {
 		return errors.New("incorrect number of arguments for the psync command")
 	}
-	_, err := rw.WriteString(SerializeSimpleString(
-		fmt.Sprintf(
-			"FULLRESYNC %s %d",
-			s.masterState.repliID,
-			s.masterState.replOffset,
+	_, err := rw.WriteString(
+		SerializeSimpleString(
+			fmt.Sprintf("FULLRESYNC %s %d", s.masterConfig.repliID, s.masterConfig.replOffset),
 		),
-	))
+	)
+	if err != nil {
+		return err
+	}
+
+	_, err = rw.WriteString(strings.TrimRight(SerializeBulkString(getEmptyRDBFileBinary()), "\r\n"))
+	if err != nil {
+		return err
+	}
+	err = rw.Flush()
 	if err != nil {
 		return err
 	}
