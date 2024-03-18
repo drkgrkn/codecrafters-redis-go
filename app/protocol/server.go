@@ -22,12 +22,13 @@ type Server struct {
 	port int
 
 	masterConfig *masterConfig
-	slaveConfig  *other
+	slaveConfig  *slaveConfig
 }
 
-type other struct {
-	addr string
-	conn net.Conn
+type slaveConfig struct {
+	addr   string
+	conn   net.Conn
+	offset uint
 }
 
 type masterConfig struct {
@@ -48,9 +49,10 @@ func WithAddressAndPort(address string, port int) ServerOptFunc {
 func WithMasterAs(address string, port int) ServerOptFunc {
 	return func(rs *Server) {
 		rs.masterConfig = nil
-		rs.slaveConfig = &other{
-			addr: fmt.Sprintf("%s:%d", address, port),
-			conn: nil,
+		rs.slaveConfig = &slaveConfig{
+			addr:   fmt.Sprintf("%s:%d", address, port),
+			conn:   nil,
+			offset: 0,
 		}
 	}
 }

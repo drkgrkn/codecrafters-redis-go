@@ -115,11 +115,28 @@ func (s *Server) processReplConfRequest(rw *bufio.ReadWriter, data []string) err
 		return errors.New("incorrect number of arguments for the replconf command")
 	}
 
-	_, err := rw.WriteString(SerializeSimpleString("OK"))
-	if err != nil {
-		return err
+	switch strings.ToLower(data[1]) {
+	// only slaves receive getack from master to assure consistency
+	case "getack":
+		if s.slaveConfig == nil {
+			return errors.New("non-master should not receive getack")
+		}
+		_, err := rw.WriteString(SerializeArray(
+			SerializeBulkString("REPLCONF"),
+			SerializeBulkString("ACK"),
+			SerializeBulkString(fmt.Sprintf("%d", s.slaveConfig.offset)),
+		))
+		if err != nil {
+			return err
+		}
+	default:
+		_, err := rw.WriteString(SerializeSimpleString("OK"))
+		if err != nil {
+			return err
+		}
 	}
-	err = rw.Flush()
+
+	err := rw.Flush()
 	return err
 }
 
