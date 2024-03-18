@@ -1,61 +1,65 @@
 package protocol
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
-	"net"
 	"strconv"
 	"strings"
 	"time"
 )
 
-func (s *Server) processPingRequest(rw *bufio.ReadWriter, data []string) error {
+func (s *Server) processPingRequest(c *Connection, data []string) error {
 	if len(data) != 1 {
 		return errors.New("incorrect number of arguments for the ping command")
 	}
-	_, err := rw.WriteString(SerializeSimpleString("PONG"))
+
+	_, err := c.WriteString(SerializeSimpleString("PONG"))
 	if err != nil {
 		return err
 	}
-	err = rw.Flush()
+	err = c.Flush()
 	return err
 }
 
-func (s *Server) processEchoRequest(rw *bufio.ReadWriter, data []string) error {
+func (s *Server) processEchoRequest(c *Connection, data []string) error {
 	if len(data) != 2 {
 		return errors.New("incorrect number of arguments for the echo command")
 	}
+
 	fmt.Printf("echoing \"%s\"\n", data[1])
-	_, err := rw.WriteString(SerializeBulkString(data[1]))
+	_, err := c.WriteString(SerializeBulkString(data[1]))
 	if err != nil {
 		return err
 	}
-	err = rw.Flush()
+	err = c.Flush()
 	return err
 }
 
-func (s *Server) processGetRequest(rw *bufio.ReadWriter, data []string) error {
+func (s *Server) processGetRequest(c *Connection, data []string) error {
 	if len(data) != 2 {
 		return errors.New("incorrect number of arguments for the set command")
 	}
-	val, ok := s.store.Get(data[1])
+
+	key := data[1]
+	val, ok := s.store.Get(key)
 	if !ok {
-		_, err := rw.WriteString(SerializeNullBulkString())
+		fmt.Printf("key %s does not exist\n", key)
+		_, err := c.WriteString(SerializeNullBulkString())
 		if err != nil {
 			return err
 		}
 	} else {
-		_, err := rw.WriteString(SerializeBulkString(val))
+		fmt.Printf("key %s exists, value %s\n", key, val)
+		_, err := c.WriteString(SerializeBulkString(val))
 		if err != nil {
 			return err
 		}
 	}
-	err := rw.Flush()
+	err := c.Flush()
 	return err
 }
 
-func (s *Server) processSetRequest(rw *bufio.ReadWriter, data []string) error {
+func (s *Server) processSetRequest(c *Connection, data []string) error {
 	if len(data) != 3 && len(data) != 5 {
 		return errors.New("incorrect number of arguments for the get command")
 	}
@@ -66,7 +70,7 @@ func (s *Server) processSetRequest(rw *bufio.ReadWriter, data []string) error {
 		if err != nil {
 			fmt.Printf("error while propogating set command: %s", err)
 		}
-		_, err = rw.WriteString(SerializeSimpleString("OK"))
+		_, err = c.WriteString(SerializeSimpleString("OK"))
 		if err != nil {
 			return err
 		}
@@ -79,16 +83,16 @@ func (s *Server) processSetRequest(rw *bufio.ReadWriter, data []string) error {
 			fmt.Printf("setting key %s val %s for %d ms\n", data[1], data[2], dur)
 			s.store.SetWithTTL(data[1], data[2], time.Duration(dur)*time.Millisecond)
 		}
-		_, err := rw.WriteString(SerializeSimpleString("OK"))
+		_, err := c.WriteString(SerializeSimpleString("OK"))
 		if err != nil {
 			return err
 		}
 	}
-	err := rw.Flush()
+	err := c.Flush()
 	return err
 }
 
-func (s *Server) processInfoRequest(rw *bufio.ReadWriter, data []string) error {
+func (s *Server) processInfoRequest(c *Connection, data []string) error {
 	if len(data) != 2 {
 		return errors.New("incorrect number of arguments for the info command")
 	}
@@ -101,16 +105,16 @@ func (s *Server) processInfoRequest(rw *bufio.ReadWriter, data []string) error {
 		} else {
 			sb.WriteString(fmt.Sprintf("role:%s\n", "slave"))
 		}
-		_, err := rw.WriteString(SerializeBulkString(sb.String()))
+		_, err := c.WriteString(SerializeBulkString(sb.String()))
 		if err != nil {
 			return err
 		}
 	}
-	err := rw.Flush()
+	err := c.Flush()
 	return err
 }
 
-func (s *Server) processReplConfRequest(rw *bufio.ReadWriter, data []string) error {
+func (s *Server) processReplConfRequest(c *Connection, data []string) error {
 	if len(data) != 3 {
 		return errors.New("incorrect number of arguments for the replconf command")
 	}
@@ -121,32 +125,26 @@ func (s *Server) processReplConfRequest(rw *bufio.ReadWriter, data []string) err
 		if s.slaveConfig == nil {
 			return errors.New("non-master should not receive getack")
 		}
-		_, err := rw.WriteString(
-			SerializeArray(
-				SerializeBulkString("REPLCONF"),
-				SerializeBulkString("ACK"),
-				SerializeBulkString(fmt.Sprintf("%d", s.slaveConfig.offset)),
-			),
-		)
+		_, err := c.ReplyGetAck(s.slaveConfig.offset)
 		if err != nil {
 			return err
 		}
 	default:
-		_, err := rw.WriteString(SerializeSimpleString("OK"))
+		_, err := c.WriteString(SerializeSimpleString("OK"))
 		if err != nil {
 			return err
 		}
 	}
 
-	err := rw.Flush()
+	err := c.Flush()
 	return err
 }
 
-func (s *Server) processPsyncRequest(rw *bufio.ReadWriter, data []string, conn net.Conn) error {
+func (s *Server) processPsyncRequest(c *Connection, data []string) error {
 	if len(data) != 3 {
 		return errors.New("incorrect number of arguments for the psync command")
 	}
-	_, err := rw.WriteString(
+	_, err := c.WriteString(
 		SerializeSimpleString(
 			fmt.Sprintf("FULLRESYNC %s %d", s.masterConfig.repliID, s.masterConfig.replOffset),
 		),
@@ -155,18 +153,18 @@ func (s *Server) processPsyncRequest(rw *bufio.ReadWriter, data []string, conn n
 		return err
 	}
 
-	_, err = rw.WriteString(strings.TrimSuffix(SerializeBulkString(getEmptyRDBFileBinary()), "\r\n"))
+	_, err = c.WriteString(strings.TrimSuffix(SerializeBulkString(getEmptyRDBFileBinary()), "\r\n"))
 	if err != nil {
 		return err
 	}
-	err = rw.Flush()
+	err = c.Flush()
 	if err != nil {
 		return err
 	}
 
 	s.masterConfig.lock.Lock()
 	defer s.masterConfig.lock.Unlock()
-	s.masterConfig.slaves = append(s.masterConfig.slaves, conn)
+	s.masterConfig.slaves = append(s.masterConfig.slaves, c)
 
 	return nil
 }

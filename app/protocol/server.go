@@ -1,7 +1,6 @@
 package protocol
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"io"
@@ -27,15 +26,15 @@ type Server struct {
 
 type slaveConfig struct {
 	addr   string
-	conn   net.Conn
-	offset uint
+	conn   *Connection
+	offset int
 }
 
 type masterConfig struct {
 	repliID    string
 	replOffset int
 	lock       sync.Mutex
-	slaves     []net.Conn
+	slaves     []*Connection
 }
 
 type ServerOptFunc func(*Server)
@@ -66,7 +65,7 @@ func NewServer(opts []ServerOptFunc) (*Server, error) {
 			repliID:    repliID,
 			replOffset: repliOffset,
 			lock:       sync.Mutex{},
-			slaves:     []net.Conn{},
+			slaves:     []*Connection{},
 		},
 		slaveConfig: nil,
 	}
@@ -94,7 +93,9 @@ func (s *Server) Listen() error {
 	}
 	defer l.Close()
 	for {
-		conn, err := l.Accept()
+		c, err := l.Accept()
+		conn := NewConn(c, false)
+
 		if err != nil {
 			fmt.Println("error accepting connection: ", err)
 		}
@@ -102,16 +103,13 @@ func (s *Server) Listen() error {
 	}
 }
 
-func (s *Server) handleClient(conn net.Conn) error {
+func (s *Server) handleClient(conn *Connection) error {
 	defer func() {
-		conn.Close()
+		conn.conn.Close()
 		fmt.Println("closing connection with client")
 	}()
-	r := bufio.NewReader(conn)
-	w := bufio.NewWriter(conn)
-	rw := bufio.NewReadWriter(r, w)
 	for {
-		err := s.handleRequest(conn, rw)
+		err := s.handleRequest(conn)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				return errors.New("client disconnected")
@@ -121,11 +119,13 @@ func (s *Server) handleClient(conn net.Conn) error {
 	}
 }
 
-func (s *Server) handleRequest(conn net.Conn, rw *bufio.ReadWriter) error {
-	lead, err := nextString(rw)
+func (s *Server) handleRequest(c *Connection) error {
+	readBytes := 0
+	lead, n, err := c.nextString()
 	if err != nil {
 		return err
 	}
+	readBytes += n
 	// Parse number of arguments
 	if lead[0] != '*' {
 		return fmt.Errorf("Leading command string should be array but was %s", lead)
@@ -137,28 +137,34 @@ func (s *Server) handleRequest(conn net.Conn, rw *bufio.ReadWriter) error {
 	data := make([]string, arrLength)
 	// Parse request command
 	for i := 0; i < arrLength; i++ {
-		data[i], err = parseWord(rw)
+		data[i], n, err = c.parseWord()
 		if err != nil {
 			return err
 		}
+		readBytes += n
 		fmt.Printf("data in command %d, %s\n", i, data[i])
 	}
+
 	// command handling
 	switch strings.ToLower(data[0]) {
 	case "ping":
-		err = s.processPingRequest(rw, data)
+		err = s.processPingRequest(c, data)
 	case "echo":
-		err = s.processEchoRequest(rw, data)
+		err = s.processEchoRequest(c, data)
 	case "get":
-		err = s.processGetRequest(rw, data)
+		err = s.processGetRequest(c, data)
 	case "set":
-		err = s.processSetRequest(rw, data)
+		err = s.processSetRequest(c, data)
 	case "info":
-		err = s.processInfoRequest(rw, data)
+		err = s.processInfoRequest(c, data)
 	case "replconf":
-		err = s.processReplConfRequest(rw, data)
+		err = s.processReplConfRequest(c, data)
 	case "psync":
-		err = s.processPsyncRequest(rw, data, conn)
+		err = s.processPsyncRequest(c, data)
+	}
+	// replicas should update their offset for all propogations from the master
+	if s.slaveConfig != nil && c.slaveToMaster {
+		s.slaveConfig.offset += readBytes
 	}
 	return err
 }
@@ -171,24 +177,22 @@ func (s *Server) handleRequest(conn net.Conn, rw *bufio.ReadWriter) error {
 //
 // - slave sends PSYNC to the master
 func (s *Server) handshakeMaster() error {
-	conn, err := net.Dial("tcp", fmt.Sprintf("%s", s.slaveConfig.addr))
+	c, err := net.Dial("tcp", fmt.Sprintf("%s", s.slaveConfig.addr))
+	conn := NewConn(c, true)
 	s.slaveConfig.conn = conn
 	if err != nil {
 		return err
 	}
-	r := bufio.NewReader(conn)
-	w := bufio.NewWriter(conn)
-	rw := bufio.NewReadWriter(r, w)
 
-	err = s.pingMaster(rw)
+	err = s.pingMaster(conn)
 	if err != nil {
 		return fmt.Errorf("error while pinging master: %s", err)
 	}
-	err = s.configureReplicationWithMaster(rw)
+	err = s.configureReplicationWithMaster(conn)
 	if err != nil {
 		return fmt.Errorf("error while configuring replication with master: %s", err)
 	}
-	err = s.psyncWithMaster(rw)
+	err = s.psyncWithMaster(conn)
 	if err != nil {
 		return fmt.Errorf("error while configuring replication with master: %s", err)
 	}
@@ -196,18 +200,18 @@ func (s *Server) handshakeMaster() error {
 	return nil
 }
 
-func (s *Server) pingMaster(rw *bufio.ReadWriter) error {
-	_, err := rw.WriteString(SerializeArray(
+func (s *Server) pingMaster(c *Connection) error {
+	_, err := c.rw.WriteString(SerializeArray(
 		SerializeBulkString("PING"),
 	))
 	if err != nil {
 		return err
 	}
-	err = rw.Flush()
+	err = c.rw.Flush()
 	if err != nil {
 		return err
 	}
-	resp, err := nextString(rw)
+	resp, _, err := c.nextString()
 	if err != nil {
 		return fmt.Errorf("master didn't response to ping: %s", err)
 	}
@@ -218,8 +222,8 @@ func (s *Server) pingMaster(rw *bufio.ReadWriter) error {
 	return nil
 }
 
-func (s *Server) configureReplicationWithMaster(rw *bufio.ReadWriter) error {
-	_, err := rw.WriteString(SerializeArray(
+func (s *Server) configureReplicationWithMaster(c *Connection) error {
+	_, err := c.rw.WriteString(SerializeArray(
 		SerializeBulkString("REPLCONF"),
 		SerializeBulkString("listening-port"),
 		SerializeBulkString(fmt.Sprintf("%d", s.port)),
@@ -227,11 +231,11 @@ func (s *Server) configureReplicationWithMaster(rw *bufio.ReadWriter) error {
 	if err != nil {
 		return err
 	}
-	err = rw.Flush()
+	err = c.rw.Flush()
 	if err != nil {
 		return err
 	}
-	resp, err := nextString(rw)
+	resp, _, err := c.nextString()
 	if err != nil {
 		return fmt.Errorf("master didn't respond to REPLCONF: %s", err)
 	}
@@ -240,7 +244,7 @@ func (s *Server) configureReplicationWithMaster(rw *bufio.ReadWriter) error {
 		return fmt.Errorf("expected master to reply ok got %s", ok)
 	}
 
-	_, err = rw.WriteString(SerializeArray(
+	_, err = c.rw.WriteString(SerializeArray(
 		SerializeBulkString("REPLCONF"),
 		SerializeBulkString("capa"),
 		SerializeBulkString("psync2"),
@@ -248,11 +252,11 @@ func (s *Server) configureReplicationWithMaster(rw *bufio.ReadWriter) error {
 	if err != nil {
 		return err
 	}
-	err = rw.Flush()
+	err = c.rw.Flush()
 	if err != nil {
 		return err
 	}
-	resp, err = nextString(rw)
+	resp, _, err = c.nextString()
 	if err != nil {
 		return fmt.Errorf("master didn't respond to REPLCONF: %s", err)
 	}
@@ -264,8 +268,8 @@ func (s *Server) configureReplicationWithMaster(rw *bufio.ReadWriter) error {
 	return nil
 }
 
-func (s *Server) psyncWithMaster(rw *bufio.ReadWriter) error {
-	_, err := rw.WriteString(SerializeArray(
+func (s *Server) psyncWithMaster(c *Connection) error {
+	_, err := c.rw.WriteString(SerializeArray(
 		SerializeBulkString("PSYNC"),
 		SerializeBulkString(fmt.Sprintf("?")),
 		SerializeBulkString(fmt.Sprintf("-1")),
@@ -273,21 +277,20 @@ func (s *Server) psyncWithMaster(rw *bufio.ReadWriter) error {
 	if err != nil {
 		return err
 	}
-	err = rw.Flush()
+	err = c.rw.Flush()
 	if err != nil {
 		return err
 	}
-	resp, err := nextString(rw)
+	resp, _, err := c.nextString()
 	if err != nil {
 		return fmt.Errorf("master didn't respond to REPLCONF: %s", err)
 	}
 	_, err = DeserializeSimpleString(resp)
 
-	rdbFile, err := parseWord(rw)
+	_, err = c.parseRDBFile()
 	if err != nil {
 		return fmt.Errorf("expected rdbfile but %s", err)
 	}
-	_, err = DeserializeSimpleString(rdbFile)
 
 	return nil
 }
@@ -308,21 +311,19 @@ func (s *Server) Set(key, val string) error {
 		))
 		s.masterConfig.lock.Lock()
 		defer s.masterConfig.lock.Unlock()
-		for _, conn := range s.masterConfig.slaves {
-			conn := conn
+		for _, c := range s.masterConfig.slaves {
 			command := fmt.Sprintf("\"%s %s %s\"", "SET", key, val)
-			addr := conn.RemoteAddr().String()
+			addr := c.conn.RemoteAddr().String()
 			fmt.Printf("syncing with slave %s, command: %s\n", addr, command)
 
-			rw := common.ReadWriterFrom(conn)
-			_, err := rw.WriteString(propagationCmd)
+			_, err := c.rw.WriteString(propagationCmd)
 			if err != nil {
 				return fmt.Errorf(
 					"failure while propagating %s command to replica %s, error: %s",
 					command, addr, err)
 			}
 
-			err = rw.Flush()
+			err = c.rw.Flush()
 			if err != nil {
 				return fmt.Errorf(
 					"failure while propagating %s command to replica %s, error: %s",

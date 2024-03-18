@@ -1,8 +1,6 @@
 package common
 
 import (
-	"bufio"
-	"io"
 	"math/rand"
 )
 
@@ -14,10 +12,4 @@ func RandomString(n int) string {
 		b[i] = alphaNumeric[rand.Intn(len(alphaNumeric))]
 	}
 	return string(b)
-}
-
-func ReadWriterFrom(rw io.ReadWriter) *bufio.ReadWriter {
-	r := bufio.NewReader(rw)
-	w := bufio.NewWriter(rw)
-	return bufio.NewReadWriter(r, w)
 }
