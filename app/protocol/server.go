@@ -126,7 +126,7 @@ func (s *Server) handleRequest(conn net.Conn, rw *bufio.ReadWriter) error {
 	}
 	// Parse number of arguments
 	if lead[0] != '*' {
-		return errors.New("Leading command string should be array")
+		return fmt.Errorf("Leading command string should be array but was %s", lead)
 	}
 	arrLength, err := strconv.Atoi(lead[1:])
 	if err != nil {
@@ -280,6 +280,12 @@ func (s *Server) psyncWithMaster(rw *bufio.ReadWriter) error {
 		return fmt.Errorf("master didn't respond to REPLCONF: %s", err)
 	}
 	_, err = DeserializeSimpleString(resp)
+
+	rdbFile, err := parseWord(rw)
+	if err != nil {
+		return fmt.Errorf("expected rdbfile but %s", err)
+	}
+	_, err = DeserializeSimpleString(rdbFile)
 
 	return nil
 }
