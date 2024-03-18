@@ -121,11 +121,13 @@ func (s *Server) processReplConfRequest(rw *bufio.ReadWriter, data []string) err
 		if s.slaveConfig == nil {
 			return errors.New("non-master should not receive getack")
 		}
-		_, err := rw.WriteString(SerializeArray(
-			SerializeBulkString("REPLCONF"),
-			SerializeBulkString("ACK"),
-			SerializeBulkString(fmt.Sprintf("%d", s.slaveConfig.offset)),
-		))
+		_, err := rw.WriteString(
+			SerializeArray(
+				SerializeBulkString("REPLCONF"),
+				SerializeBulkString("ACK"),
+				SerializeBulkString(fmt.Sprintf("%d", s.slaveConfig.offset)),
+			),
+		)
 		if err != nil {
 			return err
 		}
