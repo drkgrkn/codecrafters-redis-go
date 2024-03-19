@@ -173,7 +173,10 @@ func (s *Server) processWaitRequest(c *Connection, msg Message) error {
 	if len(msg.data) != 3 {
 		return errors.New("incorrect number of arguments for the wait command")
 	}
-	_, err := c.WriteString(SerializeInteger(0))
+
+	s.masterConfig.lock.Lock()
+	defer s.masterConfig.lock.Unlock()
+	_, err := c.WriteString(SerializeInteger(len(s.masterConfig.slaves)))
 	if err != nil {
 		return err
 	}
