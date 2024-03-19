@@ -5,6 +5,11 @@ import (
 	"strings"
 )
 
+type Message struct {
+	data      []string
+	readBytes int
+}
+
 func DeserializeSimpleString(s string) (string, error) {
 	ret := s[1:]
 	return ret, nil
@@ -21,6 +26,17 @@ func SerializeSimpleError(s string) string {
 	v := fmt.Sprintf("-%s\r\n", s)
 	return v
 }
+
+func SerializeInteger(i int) string {
+	var symbol string
+	if i >= 0 {
+		symbol = "+"
+	} else {
+		symbol = "-"
+	}
+	return fmt.Sprintf(":%s%d\r\n", symbol, i)
+}
+
 func DeserializeBulkString(data string) string {
 	return data
 }

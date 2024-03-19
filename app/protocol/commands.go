@@ -8,8 +8,8 @@ import (
 	"time"
 )
 
-func (s *Server) processPingRequest(c *Connection, data []string) error {
-	if len(data) != 1 {
+func (s *Server) processPingRequest(c *Connection, msg Message) error {
+	if len(msg.data) != 1 {
 		return errors.New("incorrect number of arguments for the ping command")
 	}
 
@@ -21,13 +21,13 @@ func (s *Server) processPingRequest(c *Connection, data []string) error {
 	return err
 }
 
-func (s *Server) processEchoRequest(c *Connection, data []string) error {
-	if len(data) != 2 {
+func (s *Server) processEchoRequest(c *Connection, msg Message) error {
+	if len(msg.data) != 2 {
 		return errors.New("incorrect number of arguments for the echo command")
 	}
 
-	fmt.Printf("echoing \"%s\"\n", data[1])
-	_, err := c.WriteString(SerializeBulkString(data[1]))
+	fmt.Printf("echoing \"%s\"\n", msg.data[1])
+	_, err := c.WriteString(SerializeBulkString(msg.data[1]))
 	if err != nil {
 		return err
 	}
@@ -35,12 +35,12 @@ func (s *Server) processEchoRequest(c *Connection, data []string) error {
 	return err
 }
 
-func (s *Server) processGetRequest(c *Connection, data []string) error {
-	if len(data) != 2 {
+func (s *Server) processGetRequest(c *Connection, msg Message) error {
+	if len(msg.data) != 2 {
 		return errors.New("incorrect number of arguments for the set command")
 	}
 
-	key := data[1]
+	key := msg.data[1]
 	val, ok := s.store.Get(key)
 	if !ok {
 		fmt.Printf("key %s does not exist\n", key)
@@ -59,14 +59,14 @@ func (s *Server) processGetRequest(c *Connection, data []string) error {
 	return err
 }
 
-func (s *Server) processSetRequest(c *Connection, data []string) error {
-	if len(data) != 3 && len(data) != 5 {
+func (s *Server) processSetRequest(c *Connection, msg Message) error {
+	if len(msg.data) != 3 && len(msg.data) != 5 {
 		return errors.New("incorrect number of arguments for the get command")
 	}
 
-	if len(data) == 3 {
-		fmt.Printf("setting key %s val %s\n", data[1], data[2])
-		err := s.Set(data[1], data[2])
+	if len(msg.data) == 3 {
+		fmt.Printf("setting key %s val %s\n", msg.data[1], msg.data[2])
+		err := s.Set(msg.data[1], msg.data[2])
 		if err != nil {
 			fmt.Printf("error while propogating set command: %s", err)
 		}
@@ -74,14 +74,14 @@ func (s *Server) processSetRequest(c *Connection, data []string) error {
 		if err != nil {
 			return err
 		}
-	} else if len(data) == 5 {
-		if strings.ToLower(data[3]) == "px" {
-			dur, err := strconv.Atoi(data[4])
+	} else if len(msg.data) == 5 {
+		if strings.ToLower(msg.data[3]) == "px" {
+			dur, err := strconv.Atoi(msg.data[4])
 			if err != nil {
 				return err
 			}
-			fmt.Printf("setting key %s val %s for %d ms\n", data[1], data[2], dur)
-			s.store.SetWithTTL(data[1], data[2], time.Duration(dur)*time.Millisecond)
+			fmt.Printf("setting key %s val %s for %d ms\n", msg.data[1], msg.data[2], dur)
+			s.store.SetWithTTL(msg.data[1], msg.data[2], time.Duration(dur)*time.Millisecond)
 		}
 		_, err := c.WriteString(SerializeSimpleString("OK"))
 		if err != nil {
@@ -92,16 +92,16 @@ func (s *Server) processSetRequest(c *Connection, data []string) error {
 	return err
 }
 
-func (s *Server) processInfoRequest(c *Connection, data []string) error {
-	if len(data) != 2 {
+func (s *Server) processInfoRequest(c *Connection, msg Message) error {
+	if len(msg.data) != 2 {
 		return errors.New("incorrect number of arguments for the info command")
 	}
-	if data[1] == "replication" {
+	if msg.data[1] == "replication" {
 		var sb strings.Builder
 		if s.masterConfig != nil {
 			sb.WriteString(fmt.Sprintf("role:%s\n", "master"))
-			sb.WriteString(fmt.Sprintf("master_replid:%s\n", s.masterConfig.repliID))
-			sb.WriteString(fmt.Sprintf("master_repl_offset:%d\n", s.masterConfig.replOffset))
+			sb.WriteString(fmt.Sprintf("master_replid:%s\n", s.masterConfig.id))
+			sb.WriteString(fmt.Sprintf("master_repl_offset:%d\n", s.masterConfig.offset))
 		} else {
 			sb.WriteString(fmt.Sprintf("role:%s\n", "slave"))
 		}
@@ -114,13 +114,13 @@ func (s *Server) processInfoRequest(c *Connection, data []string) error {
 	return err
 }
 
-func (s *Server) processReplConfRequest(c *Connection, data []string) error {
-	if len(data) != 3 {
+func (s *Server) processReplConfRequest(c *Connection, msg Message) error {
+	// only slaves receive getack from master to assure consistency
+	if len(msg.data) != 3 {
 		return errors.New("incorrect number of arguments for the replconf command")
 	}
 
-	switch strings.ToLower(data[1]) {
-	// only slaves receive getack from master to assure consistency
+	switch strings.ToLower(msg.data[1]) {
 	case "getack":
 		if s.slaveConfig == nil {
 			return errors.New("non-master should not receive getack")
@@ -140,13 +140,13 @@ func (s *Server) processReplConfRequest(c *Connection, data []string) error {
 	return err
 }
 
-func (s *Server) processPsyncRequest(c *Connection, data []string) error {
-	if len(data) != 3 {
+func (s *Server) processPsyncRequest(c *Connection, msg Message) error {
+	if len(msg.data) != 3 {
 		return errors.New("incorrect number of arguments for the psync command")
 	}
 	_, err := c.WriteString(
 		SerializeSimpleString(
-			fmt.Sprintf("FULLRESYNC %s %d", s.masterConfig.repliID, s.masterConfig.replOffset),
+			fmt.Sprintf("FULLRESYNC %s %d", s.masterConfig.id, s.masterConfig.offset),
 		),
 	)
 	if err != nil {
@@ -165,6 +165,22 @@ func (s *Server) processPsyncRequest(c *Connection, data []string) error {
 	s.masterConfig.lock.Lock()
 	defer s.masterConfig.lock.Unlock()
 	s.masterConfig.slaves = append(s.masterConfig.slaves, c)
+
+	return nil
+}
+
+func (s *Server) processWaitRequest(c *Connection, msg Message) error {
+	if len(msg.data) != 3 {
+		return errors.New("incorrect number of arguments for the wait command")
+	}
+	_, err := c.WriteString(SerializeInteger(0))
+	if err != nil {
+		return err
+	}
+	err = c.Flush()
+	if err != nil {
+		return err
+	}
 
 	return nil
 }

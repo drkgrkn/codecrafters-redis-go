@@ -31,10 +31,11 @@ type slaveConfig struct {
 }
 
 type masterConfig struct {
-	repliID    string
-	replOffset int
-	lock       sync.Mutex
-	slaves     []*Connection
+	id string
+
+	lock   sync.Mutex
+	offset int
+	slaves []*Connection
 }
 
 type ServerOptFunc func(*Server)
@@ -62,10 +63,10 @@ func NewServer(opts []ServerOptFunc) (*Server, error) {
 	server := &Server{
 		store: NewStore(),
 		masterConfig: &masterConfig{
-			repliID:    repliID,
-			replOffset: repliOffset,
-			lock:       sync.Mutex{},
-			slaves:     []*Connection{},
+			id:     repliID,
+			offset: repliOffset,
+			lock:   sync.Mutex{},
+			slaves: []*Connection{},
 		},
 		slaveConfig: nil,
 	}
@@ -73,6 +74,7 @@ func NewServer(opts []ServerOptFunc) (*Server, error) {
 		f(server)
 	}
 
+	// slave server specific processes
 	if server.slaveConfig != nil {
 		err := server.handshakeMaster()
 		if err != nil {
@@ -120,12 +122,12 @@ func (s *Server) handleClient(conn *Connection) error {
 }
 
 func (s *Server) handleRequest(c *Connection) error {
-	readBytes := 0
+	var msg Message
 	lead, n, err := c.nextString()
 	if err != nil {
 		return err
 	}
-	readBytes += n
+	msg.readBytes += n
 	// Parse number of arguments
 	if lead[0] != '*' {
 		return fmt.Errorf("Leading command string should be array but was %s", lead)
@@ -134,39 +136,52 @@ func (s *Server) handleRequest(c *Connection) error {
 	if err != nil {
 		return err
 	}
-	data := make([]string, arrLength)
-	// Parse request command
+
+	msg.data = make([]string, arrLength)
+
 	for i := 0; i < arrLength; i++ {
-		data[i], n, err = c.parseWord()
+		msg.data[i], n, err = c.parseWord()
 		if err != nil {
 			return err
 		}
-		readBytes += n
-		fmt.Printf("data in command %d, %s\n", i, data[i])
+		msg.readBytes += n
+		fmt.Printf("data in command %d, %s\n", i, msg.data[i])
 	}
 
 	// command handling
-	switch strings.ToLower(data[0]) {
+	switch strings.ToLower(msg.data[0]) {
 	case "ping":
-		err = s.processPingRequest(c, data)
+		err = s.processPingRequest(c, msg)
 	case "echo":
-		err = s.processEchoRequest(c, data)
+		err = s.processEchoRequest(c, msg)
 	case "get":
-		err = s.processGetRequest(c, data)
+		err = s.processGetRequest(c, msg)
 	case "set":
-		err = s.processSetRequest(c, data)
+		err = s.processSetRequest(c, msg)
 	case "info":
-		err = s.processInfoRequest(c, data)
+		err = s.processInfoRequest(c, msg)
 	case "replconf":
-		err = s.processReplConfRequest(c, data)
+		err = s.processReplConfRequest(c, msg)
 	case "psync":
-		err = s.processPsyncRequest(c, data)
+		err = s.processPsyncRequest(c, msg)
+	case "wait":
+		err = s.processWaitRequest(c, msg)
 	}
 	// replicas should update their offset for all propogations from the master
-	if s.slaveConfig != nil && c.slaveToMaster {
-		s.slaveConfig.offset += readBytes
+	if c.slaveToMaster {
+		s.incrementOffset(msg.readBytes)
 	}
 	return err
+}
+
+func (s *Server) incrementOffset(i int) {
+	if s.masterConfig != nil {
+		s.masterConfig.lock.Lock()
+		defer s.masterConfig.lock.Unlock()
+		s.masterConfig.offset += i
+	} else {
+		s.slaveConfig.offset += i
+	}
 }
 
 // handshake goes as:
