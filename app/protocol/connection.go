@@ -10,10 +10,9 @@ import (
 )
 
 type Connection struct {
-	conn  net.Conn
-	rw    *bufio.ReadWriter
-	lock  sync.Mutex
-	rLock sync.Mutex
+	conn net.Conn
+	rw   *bufio.ReadWriter
+	lock sync.Mutex
 
 	slaveToMaster bool
 }
@@ -44,8 +43,6 @@ func (c *Connection) WriteString(s string) (int, error) {
 	if c.slaveToMaster {
 		return 0, nil
 	}
-	c.lock.Lock()
-	defer c.lock.Unlock()
 	n, err := c.rw.WriteString(s)
 	if err != nil {
 		return n, err
@@ -55,8 +52,6 @@ func (c *Connection) WriteString(s string) (int, error) {
 }
 
 func (c *Connection) ReplyGetAck(offset int) (int, error) {
-	c.lock.Lock()
-	defer c.lock.Unlock()
 	n, err := c.rw.WriteString(
 		SerializeArray(
 			SerializeBulkString("REPLCONF"),
@@ -73,8 +68,6 @@ func (c *Connection) ReplyGetAck(offset int) (int, error) {
 
 // returns: read string, how many bytes were read, error
 func (c *Connection) nextString() (string, int, error) {
-	c.rLock.Lock()
-	defer c.rLock.Unlock()
 	s, err := c.rw.ReadString('\n')
 	if err != nil {
 		return "", 0, err

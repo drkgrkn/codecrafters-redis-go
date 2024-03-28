@@ -351,9 +351,9 @@ func (s *Server) SyncSlaves(ctx context.Context) <-chan unit {
 
 	s.masterConfig.offset += len(cmd)
 
-	go func() {
+	func() {
 		for _, sc := range s.masterConfig.slaves {
-			func(sc *SlaveConnection) {
+			go func(sc *SlaveConnection) {
 				sc.offsetLock.Lock()
 				defer sc.offsetLock.Unlock()
 				_, err := sc.WriteString(cmd)
