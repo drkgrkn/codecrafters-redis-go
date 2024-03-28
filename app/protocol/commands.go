@@ -193,9 +193,18 @@ func (s *Server) processWaitRequest(c *Connection, msg Message) error {
 	}
 	ctx, ctxCancel := context.WithTimeout(ctx, time.Duration(ms)*time.Millisecond)
 	defer ctxCancel()
-	_, err = c.WriteString(SerializeInteger(len(s.masterConfig.slaves)))
-	if err != nil {
-		return err
+
+	currInSyncCount := 0
+	for _, sc := range s.masterConfig.slaves {
+		if s.masterConfig.offset == sc.offset {
+			currInSyncCount++
+		}
+	}
+	if currInSyncCount >= reqInSyncReplCount {
+		_, err = c.WriteString(SerializeInteger(currInSyncCount))
+		if err != nil {
+			return err
+		}
 	}
 	ch := s.SyncSlaves(ctx)
 	inSyncCount := 0
