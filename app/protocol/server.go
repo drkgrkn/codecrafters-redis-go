@@ -382,5 +382,5 @@ func (s *Server) SyncSlaves(ctx context.Context) <-chan struct{} {
 		}
 	}()
 
-	return ch, nil
+	return ch
 }
