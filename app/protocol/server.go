@@ -330,11 +330,10 @@ func (s *Server) Set(key, val string) error {
 	return nil
 }
 
+// `s *Server` should be locked when this function is called
+//
 // channel returns current in sync slave count
 func (s *Server) SyncSlaves(ctx context.Context) <-chan struct{} {
-	s.masterConfig.lock.Lock()
-	defer s.masterConfig.lock.Unlock()
-
 	var (
 		inSyncReplicaCount = 0
 		masterOffset       = s.masterConfig.offset
