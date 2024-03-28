@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -151,7 +150,6 @@ func (s *Server) processPsyncRequest(c *Connection, msg Message) error {
 	s.masterConfig.slaves = append(s.masterConfig.slaves, &SlaveConnection{
 		Connection: c,
 		offset:     0,
-		offsetLock: sync.Mutex{},
 	})
 
 	return nil
@@ -164,10 +162,12 @@ func (s *Server) processWaitRequest(c *Connection, msg Message) error {
 	if len(msg.data) != 3 {
 		return errors.New("incorrect number of arguments for the wait command")
 	}
+
 	reqInSyncReplCount, err := strconv.Atoi(msg.data[1])
 	if err != nil {
 		return fmt.Errorf("wait command second arg should be integer but %w", err)
 	}
+
 	ms, err := strconv.Atoi(msg.data[2])
 	if err != nil {
 		return fmt.Errorf("wait command third arg should be integer but %w", err)
@@ -184,12 +184,14 @@ func (s *Server) processWaitRequest(c *Connection, msg Message) error {
 		}
 	}
 	fmt.Printf("%d replicas are currently in sync\n", currInSyncCount)
-	if currInSyncCount >= reqInSyncReplCount || len(s.masterConfig.slaves) == currInSyncCount {
+
+	if s.areEnoughReplicasInSync(currInSyncCount, reqInSyncReplCount) {
 		fmt.Printf("enough replicas are in sync for wait command\n")
 		_, err = c.WriteString(SerializeInteger(currInSyncCount))
 		return err
 	}
-	fmt.Printf("resyncing with slaves\n")
+
+	fmt.Printf("not enough replicas were in sync, resyncing with slaves\n")
 	ch := s.SyncSlaves(ctx)
 	inSyncCount := 0
 	for {
@@ -200,17 +202,23 @@ func (s *Server) processWaitRequest(c *Connection, msg Message) error {
 			if err != nil {
 				return err
 			}
+
 			return ctx.Err()
 		case <-ch:
 			inSyncCount++
-			_, err = c.WriteString(SerializeInteger(inSyncCount))
 			fmt.Printf("%d replicas are in sync\n", inSyncCount)
-			if inSyncCount >= reqInSyncReplCount || len(s.masterConfig.slaves) == inSyncCount {
+
+			if s.areEnoughReplicasInSync(inSyncCount, reqInSyncReplCount) {
 				fmt.Printf("enough replicas are in sync %d\n", inSyncCount)
 				_, err = c.WriteString(SerializeInteger(inSyncCount))
-				time.Sleep(50 * time.Millisecond)
 				return err
 			}
 		}
 	}
+}
+
+func (s *Server) areEnoughReplicasInSync(curr, required int) bool {
+	total := len(s.masterConfig.slaves)
+	return curr >= required ||
+		curr == total
 }

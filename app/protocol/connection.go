@@ -19,8 +19,7 @@ type Connection struct {
 
 type SlaveConnection struct {
 	*Connection
-	offset     int
-	offsetLock sync.Mutex
+	offset int
 }
 
 func NewConn(conn net.Conn, slaveToMaster bool) *Connection {

@@ -113,7 +113,11 @@ func (s *Server) handleClient(conn *Connection) error {
 				conn.conn.Close()
 				fmt.Println("closing connection with client")
 				return errors.New("client disconnected")
+
 			} else if errors.Is(err, C2S) {
+				// client is promoted to replica
+				// cancel the handleClient loop
+				// but do not close the connection
 				return nil
 			}
 			fmt.Printf("error with request %s\n", err)
@@ -146,7 +150,7 @@ func (s *Server) handleRequest(c *Connection) error {
 	case "psync":
 		err := s.processPsyncRequest(c, msg)
 		if err == nil {
-			return C2S
+			err = C2S
 		}
 	case "wait":
 		err = s.processWaitRequest(c, msg)
@@ -179,15 +183,17 @@ func (s *Server) handshakeMaster() error {
 
 	err = s.pingMaster(conn)
 	if err != nil {
-		return fmt.Errorf("error while pinging master: %s", err)
+		return fmt.Errorf("error while pinging master: %w", err)
 	}
+
 	err = s.configureReplicationWithMaster(conn)
 	if err != nil {
-		return fmt.Errorf("error while configuring replication with master: %s", err)
+		return fmt.Errorf("error while configuring replication with master: %w", err)
 	}
+
 	err = s.psyncWithMaster(conn)
 	if err != nil {
-		return fmt.Errorf("error while configuring replication with master: %s", err)
+		return fmt.Errorf("error while configuring replication with master: %w", err)
 	}
 
 	return nil
@@ -206,7 +212,7 @@ func (s *Server) pingMaster(c *Connection) error {
 	}
 	resp, _, err := c.nextString()
 	if err != nil {
-		return fmt.Errorf("master didn't response to ping: %s", err)
+		return fmt.Errorf("master didn't response to ping: %w", err)
 	}
 	pong, err := DeserializeSimpleString(resp)
 	if err != nil || strings.ToLower(pong) != "pong" {
@@ -230,7 +236,7 @@ func (s *Server) configureReplicationWithMaster(c *Connection) error {
 	}
 	resp, _, err := c.nextString()
 	if err != nil {
-		return fmt.Errorf("master didn't respond to REPLCONF: %s", err)
+		return fmt.Errorf("master didn't respond to REPLCONF: %w", err)
 	}
 	ok, err := DeserializeSimpleString(resp)
 	if err != nil || strings.ToLower(ok) != "ok" {
@@ -251,7 +257,7 @@ func (s *Server) configureReplicationWithMaster(c *Connection) error {
 	}
 	resp, _, err = c.nextString()
 	if err != nil {
-		return fmt.Errorf("master didn't respond to REPLCONF: %s", err)
+		return fmt.Errorf("master didn't respond to REPLCONF: %w", err)
 	}
 	ok, err = DeserializeSimpleString(resp)
 	if err != nil || strings.ToLower(ok) != "ok" {
@@ -276,13 +282,13 @@ func (s *Server) psyncWithMaster(c *Connection) error {
 	}
 	resp, _, err := c.nextString()
 	if err != nil {
-		return fmt.Errorf("master didn't respond to REPLCONF: %s", err)
+		return fmt.Errorf("master didn't respond to REPLCONF: %w", err)
 	}
 	_, err = DeserializeSimpleString(resp)
 
 	_, err = c.parseRDBFile()
 	if err != nil {
-		return fmt.Errorf("expected rdbfile but %s", err)
+		return fmt.Errorf("expected rdbfile but %w", err)
 	}
 
 	return nil
@@ -341,8 +347,7 @@ func (s *Server) SyncSlaves(ctx context.Context) <-chan unit {
 	var (
 		fanInChan = make(chan int, len(s.masterConfig.slaves))
 		ch        = make(chan unit, len(s.masterConfig.slaves))
-
-		cmd = SerializeArray(
+		cmd       = SerializeArray(
 			SerializeBulkString("REPLCONF"),
 			SerializeBulkString("GETACK"),
 			SerializeBulkString("*"),
@@ -353,9 +358,10 @@ func (s *Server) SyncSlaves(ctx context.Context) <-chan unit {
 
 	func() {
 		for _, sc := range s.masterConfig.slaves {
-			go func(sc *SlaveConnection) {
-				sc.offsetLock.Lock()
-				defer sc.offsetLock.Unlock()
+			sc := sc
+			go func() {
+				sc.lock.Lock()
+				defer sc.lock.Unlock()
 				_, err := sc.WriteString(cmd)
 				if err != nil {
 					return
@@ -374,7 +380,7 @@ func (s *Server) SyncSlaves(ctx context.Context) <-chan unit {
 				sc.offset = offset
 				fanInChan <- offset
 				fmt.Printf("sent offset %d\n", offset)
-			}(sc)
+			}()
 		}
 	}()
 
