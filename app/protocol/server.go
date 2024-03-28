@@ -20,6 +20,7 @@ type Server struct {
 	addr string
 	port int
 
+	lock         sync.Mutex
 	masterConfig *masterConfig
 	slaveConfig  *slaveConfig
 }
@@ -33,7 +34,6 @@ type slaveConfig struct {
 type masterConfig struct {
 	id string
 
-	lock   sync.Mutex
 	offset int
 	slaves []*SlaveConnection
 }
@@ -62,10 +62,10 @@ func NewServer(opts []ServerOptFunc) (*Server, error) {
 	repliOffset := 0
 	server := &Server{
 		store: NewStore(),
+		lock:  sync.Mutex{},
 		masterConfig: &masterConfig{
 			id:     repliID,
 			offset: repliOffset,
-			lock:   sync.Mutex{},
 			slaves: []*SlaveConnection{},
 		},
 		slaveConfig: nil,
@@ -128,6 +128,8 @@ func (s *Server) handleRequest(c *Connection) error {
 	}
 
 	// command handling
+	s.lock.Lock()
+	defer s.lock.Unlock()
 	switch strings.ToLower(msg.data[0]) {
 	case "ping":
 		err = s.processPingRequest(c, msg)
@@ -155,8 +157,6 @@ func (s *Server) handleRequest(c *Connection) error {
 
 func (s *Server) incrementOffset(i int) {
 	if s.masterConfig != nil {
-		s.masterConfig.lock.Lock()
-		defer s.masterConfig.lock.Unlock()
 		s.masterConfig.offset += i
 	} else {
 		s.slaveConfig.offset += i
@@ -303,8 +303,8 @@ func (s *Server) Set(key, val string) error {
 			SerializeBulkString(key),
 			SerializeBulkString(val),
 		))
-		s.masterConfig.lock.Lock()
-		defer s.masterConfig.lock.Unlock()
+		s.lock.Lock()
+		defer s.lock.Unlock()
 		for _, c := range s.masterConfig.slaves {
 			command := fmt.Sprintf("\"%s %s %s\"", "SET", key, val)
 			addr := c.conn.RemoteAddr().String()
