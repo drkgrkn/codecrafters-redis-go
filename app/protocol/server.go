@@ -309,7 +309,7 @@ func (s *Server) Set(key, val string) error {
 	s.masterConfig.offset += len(propagationCmd)
 	for _, c := range s.masterConfig.slaves {
 		wg.Add(1)
-		go func(sc *SlaveConnection) {
+		func(sc *SlaveConnection) {
 			defer wg.Done()
 			sc.lock.Lock()
 			defer sc.lock.Unlock()
@@ -349,30 +349,32 @@ func (s *Server) SyncSlaves(ctx context.Context) <-chan unit {
 
 	s.masterConfig.offset += len(cmd)
 
-	for _, sc := range s.masterConfig.slaves {
-		go func(sc *SlaveConnection) {
-			sc.lock.Lock()
-			defer sc.lock.Unlock()
-			_, err := sc.WriteString(cmd)
-			if err != nil {
-				return
-			}
-			msg, err := sc.nextCommand()
-			if err != nil {
-				fmt.Printf("%s\n", err)
-				return
-			}
-			offset, err := msg.parseReplConfAck()
-			if err != nil {
-				fmt.Printf("%s\n", err)
-				return
-			}
-			fmt.Printf("received offset %d\n", offset)
-			sc.offset = offset
-			fanInChan <- offset
-			fmt.Printf("sent offset %d\n", offset)
-		}(sc)
-	}
+	go func() {
+		for _, sc := range s.masterConfig.slaves {
+			func(sc *SlaveConnection) {
+				sc.lock.Lock()
+				defer sc.lock.Unlock()
+				_, err := sc.WriteString(cmd)
+				if err != nil {
+					return
+				}
+				msg, err := sc.nextCommand()
+				if err != nil {
+					fmt.Printf("%s\n", err)
+					return
+				}
+				offset, err := msg.parseReplConfAck()
+				if err != nil {
+					fmt.Printf("%s\n", err)
+					return
+				}
+				fmt.Printf("received offset %d\n", offset)
+				sc.offset = offset
+				fanInChan <- offset
+				fmt.Printf("sent offset %d\n", offset)
+			}(sc)
+		}
+	}()
 
 	go func() {
 		for {
