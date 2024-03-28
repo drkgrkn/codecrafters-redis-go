@@ -328,10 +328,10 @@ func (s *Server) Set(key, val string) error {
 // `s *Server` should be locked when this function is called
 //
 // channel returns current in sync slave count
-func (s *Server) SyncSlaves(ctx context.Context) <-chan struct{} {
+func (s *Server) SyncSlaves(ctx context.Context) <-chan unit {
 	var (
-		fanInChan = make(chan int)
-		ch        = make(chan struct{}, len(s.masterConfig.slaves))
+		fanInChan = make(chan int, len(s.masterConfig.slaves))
+		ch        = make(chan unit, len(s.masterConfig.slaves))
 
 		cmd = SerializeArray(
 			SerializeBulkString("REPLCONF"),
@@ -371,7 +371,7 @@ func (s *Server) SyncSlaves(ctx context.Context) <-chan struct{} {
 			case offset := <-fanInChan:
 				fmt.Printf("got offset %d, master is %d\n", offset, s.masterConfig.offset)
 				if offset == s.masterConfig.offset {
-					ch <- struct{}{}
+					ch <- unit{}
 				}
 			}
 		}

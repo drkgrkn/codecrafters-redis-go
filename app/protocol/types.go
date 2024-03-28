@@ -5,6 +5,8 @@ import (
 	"strings"
 )
 
+type unit struct{}
+
 func DeserializeSimpleString(s string) (string, error) {
 	ret := s[1:]
 	return ret, nil
