@@ -213,7 +213,7 @@ func (s *Server) processWaitRequest(c *Connection, msg Message) error {
 			return ctx.Err()
 		case <-ch:
 			inSyncCount++
-			if inSyncCount == reqInSyncReplCount {
+			if inSyncCount >= reqInSyncReplCount {
 				_, err = c.WriteString(SerializeInteger(inSyncCount))
 				return err
 			}

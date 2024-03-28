@@ -120,8 +120,8 @@ func (c *Connection) nextCommand() (Message, error) {
 			return msg, err
 		}
 		msg.readBytes += n
-		fmt.Printf("data in command %d, %s\n", i, msg.data[i])
 	}
+	fmt.Printf("incoming: %s\n", msg.data)
 	return msg, nil
 }
 
