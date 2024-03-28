@@ -194,7 +194,7 @@ func (s *Server) processWaitRequest(c *Connection, msg Message) error {
 	ctx, ctxCancel := context.WithTimeout(ctx, time.Duration(ms)*time.Millisecond)
 	defer ctxCancel()
 
-	currInSyncCount := 1
+	currInSyncCount := 0
 	for _, sc := range s.masterConfig.slaves {
 		if s.masterConfig.offset == sc.offset {
 			currInSyncCount++
@@ -207,7 +207,7 @@ func (s *Server) processWaitRequest(c *Connection, msg Message) error {
 		}
 	}
 	ch := s.SyncSlaves(ctx)
-	inSyncCount := 1
+	inSyncCount := 0
 	for {
 		select {
 		case <-ctx.Done():
