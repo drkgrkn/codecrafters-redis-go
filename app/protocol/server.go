@@ -70,8 +70,8 @@ func NewServer(opts []ServerOptFunc) (*Server, error) {
 		},
 		slaveConfig: nil,
 	}
-	for _, f := range opts {
-		f(server)
+	for _, optFunc := range opts {
+		optFunc(server)
 	}
 
 	// slave server specific processes
@@ -130,7 +130,7 @@ func (s *Server) handleRequest(c *Connection) error {
 	if err != nil {
 		return err
 	}
-
+	fmt.Println("handling command: ", msg.data)
 	// command handling
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -159,6 +159,7 @@ func (s *Server) handleRequest(c *Connection) error {
 	if c.slaveToMaster {
 		s.incrementOffset(msg.readBytes)
 	}
+	fmt.Println("handled command: ", msg.data)
 	return err
 }
 
@@ -362,20 +363,24 @@ func (s *Server) SyncSlaves(ctx context.Context) <-chan unit {
 			go func() {
 				sc.lock.Lock()
 				defer sc.lock.Unlock()
+
 				_, err := sc.WriteString(cmd)
 				if err != nil {
 					return
 				}
+
 				msg, err := sc.nextCommand()
 				if err != nil {
 					fmt.Printf("%s\n", err)
 					return
 				}
+
 				offset, err := msg.parseReplConfAck()
 				if err != nil {
 					fmt.Printf("%s\n", err)
 					return
 				}
+
 				fmt.Printf("received offset %d\n", offset)
 				sc.offset = offset
 				fanInChan <- offset
