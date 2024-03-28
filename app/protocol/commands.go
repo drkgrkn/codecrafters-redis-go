@@ -211,6 +211,7 @@ func (s *Server) processWaitRequest(c *Connection, msg Message) error {
 	for {
 		select {
 		case <-ctx.Done():
+			fmt.Printf("%d replicas are in sync, responding due to timeout\n", inSyncCount)
 			_, err = c.WriteString(SerializeInteger(inSyncCount))
 			if err != nil {
 				return err
@@ -220,7 +221,7 @@ func (s *Server) processWaitRequest(c *Connection, msg Message) error {
 			inSyncCount++
 			fmt.Printf("%d replicas are in sync\n", inSyncCount)
 			if inSyncCount >= reqInSyncReplCount || len(s.masterConfig.slaves) == inSyncCount {
-				fmt.Printf("enought replicas are in sync %d\n", inSyncCount)
+				fmt.Printf("enough replicas are in sync %d\n", inSyncCount)
 				_, err = c.WriteString(SerializeInteger(inSyncCount))
 				return err
 			}
