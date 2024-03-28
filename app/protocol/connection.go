@@ -53,6 +53,7 @@ func (c *Connection) WriteString(s string) (int, error) {
 		return n, err
 	}
 	err = c.rw.Flush()
+	fmt.Printf("flushed %s, err %s", s, err)
 	return n, err
 }
 
