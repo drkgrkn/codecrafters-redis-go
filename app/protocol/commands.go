@@ -198,7 +198,7 @@ func (s *Server) processWaitRequest(c *Connection, msg Message) error {
 		}
 	}
 	fmt.Printf("%d replicas are currently in sync\n", currInSyncCount)
-	if currInSyncCount >= reqInSyncReplCount {
+	if currInSyncCount >= reqInSyncReplCount || len(s.masterConfig.slaves) == reqInSyncReplCount {
 		_, err = c.WriteString(SerializeInteger(currInSyncCount))
 		if err != nil {
 			return err
