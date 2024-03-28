@@ -196,7 +196,6 @@ func (s *Server) processWaitRequest(c *Connection, msg Message) error {
 	ch := s.SyncSlaves(ctx)
 	time.Sleep(100 * time.Millisecond)
 	for inSyncCount = range ch {
-		inSyncCount++
 		fmt.Printf("%d replicas are in sync\n", inSyncCount)
 
 		if s.areEnoughReplicasInSync(inSyncCount, reqInSyncReplCount) {
