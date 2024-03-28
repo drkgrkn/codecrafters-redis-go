@@ -16,10 +16,6 @@ func (s *Server) processPingRequest(c *Connection, msg Message) error {
 	}
 
 	_, err := c.WriteString(SerializeSimpleString("PONG"))
-	if err != nil {
-		return err
-	}
-	err = c.Flush()
 	return err
 }
 
@@ -30,10 +26,6 @@ func (s *Server) processEchoRequest(c *Connection, msg Message) error {
 
 	fmt.Printf("echoing \"%s\"\n", msg.data[1])
 	_, err := c.WriteString(SerializeBulkString(msg.data[1]))
-	if err != nil {
-		return err
-	}
-	err = c.Flush()
 	return err
 }
 
@@ -57,8 +49,7 @@ func (s *Server) processGetRequest(c *Connection, msg Message) error {
 			return err
 		}
 	}
-	err := c.Flush()
-	return err
+	return nil
 }
 
 func (s *Server) processSetRequest(c *Connection, msg Message) error {
@@ -90,8 +81,7 @@ func (s *Server) processSetRequest(c *Connection, msg Message) error {
 			return err
 		}
 	}
-	err := c.Flush()
-	return err
+	return nil
 }
 
 func (s *Server) processInfoRequest(c *Connection, msg Message) error {
@@ -112,8 +102,7 @@ func (s *Server) processInfoRequest(c *Connection, msg Message) error {
 			return err
 		}
 	}
-	err := c.Flush()
-	return err
+	return nil
 }
 
 func (s *Server) processReplConfRequest(c *Connection, msg Message) error {
@@ -122,7 +111,7 @@ func (s *Server) processReplConfRequest(c *Connection, msg Message) error {
 		return errors.New("incorrect number of arguments for the replconf command")
 	}
 
-	switch strings.ToLower(msg.data[1]) {
+	switch msg.data[1] {
 	case "getack":
 		if s.slaveConfig == nil {
 			return errors.New("non-master should not receive getack")
@@ -138,8 +127,7 @@ func (s *Server) processReplConfRequest(c *Connection, msg Message) error {
 		}
 	}
 
-	err := c.Flush()
-	return err
+	return nil
 }
 
 func (s *Server) processPsyncRequest(c *Connection, msg Message) error {
@@ -156,10 +144,6 @@ func (s *Server) processPsyncRequest(c *Connection, msg Message) error {
 	}
 
 	_, err = c.WriteString(strings.TrimSuffix(SerializeBulkString(getEmptyRDBFileBinary()), "\r\n"))
-	if err != nil {
-		return err
-	}
-	err = c.Flush()
 	if err != nil {
 		return err
 	}
@@ -188,8 +172,7 @@ func (s *Server) processWaitRequest(c *Connection, msg Message) error {
 		return fmt.Errorf("wait command third arg should be integer but %w", err)
 	}
 
-	ctx, ctxCancel := context.WithTimeout(ctx, time.Duration(ms)*time.Millisecond)
-	fmt.Println("wait dur ", time.Duration(ms)*time.Millisecond)
+	ctx, ctxCancel := context.WithTimeout(ctx, time.Duration(ms)*time.Millisecond/2)
 	defer ctxCancel()
 
 	currInSyncCount := 0

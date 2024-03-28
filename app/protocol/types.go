@@ -28,13 +28,7 @@ func SerializeSimpleError(s string) string {
 }
 
 func SerializeInteger(i int) string {
-	var symbol string
-	if i >= 0 {
-		symbol = "+"
-	} else {
-		symbol = "-"
-	}
-	return fmt.Sprintf(":%s%d\r\n", symbol, i)
+	return fmt.Sprintf(":%d\r\n", i)
 }
 
 func DeserializeBulkString(data string) string {
