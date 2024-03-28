@@ -50,13 +50,18 @@ func (c *Connection) WriteString(s string) (int, error) {
 }
 
 func (c *Connection) ReplyGetAck(offset int) (int, error) {
-	return c.rw.WriteString(
+	n, err := c.rw.WriteString(
 		SerializeArray(
 			SerializeBulkString("REPLCONF"),
 			SerializeBulkString("ACK"),
 			SerializeBulkString(fmt.Sprintf("%d", offset)),
 		),
 	)
+	if err != nil {
+		return n, err
+	}
+	err = c.rw.Flush()
+	return n, err
 }
 
 func (c *Connection) Flush() error {
