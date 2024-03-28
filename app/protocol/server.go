@@ -352,10 +352,12 @@ func (s *Server) SyncSlaves(ctx context.Context) <-chan unit {
 			}
 			msg, err := sc.nextCommand()
 			if err != nil {
+				fmt.Printf("%s\n", err)
 				return
 			}
 			offset, err := msg.parseReplConfAck()
 			if err != nil {
+				fmt.Printf("%s\n", err)
 				return
 			}
 			fmt.Printf("received offset %d\n", offset)
