@@ -358,49 +358,47 @@ func (s *Server) SyncSlaves(ctx context.Context) <-chan unit {
 
 	s.masterConfig.offset += len(cmd)
 
-	func() {
-		for _, sc := range s.masterConfig.slaves {
-			sc := sc
+	for _, sc := range s.masterConfig.slaves {
+		sc := sc
+		go func() {
+			sc.lock.Lock()
+			defer sc.lock.Unlock()
+
+			_, err := sc.WriteString(cmd)
+			if err != nil {
+				return
+			}
+
+			cmdChan := make(chan Message)
 			go func() {
-				sc.lock.Lock()
-				defer sc.lock.Unlock()
-
-				_, err := sc.WriteString(cmd)
+				defer close(cmdChan)
+				msg, err := sc.nextCommand()
 				if err != nil {
-					return
+					fmt.Printf("%s\n", err)
 				}
-
-				cmdChan := make(chan Message)
-				go func() {
-					defer close(cmdChan)
-					msg, err := sc.nextCommand()
-					if err != nil {
-						fmt.Printf("%s\n", err)
-					}
-					cmdChan <- msg
-				}()
-				select {
-				case <-ctx.Done():
-					return
-				case msg, ok := <-cmdChan:
-					if !ok {
-						return
-					}
-					offset, err := msg.parseReplConfAck()
-					if err != nil {
-						fmt.Printf("%s\n", err)
-						return
-					}
-
-					fmt.Printf("received offset %d\n", offset)
-					sc.offset = offset
-					fanInChan <- offset
-					fmt.Printf("sent offset %d\n", offset)
-				}
-
+				cmdChan <- msg
 			}()
-		}
-	}()
+			select {
+			case <-ctx.Done():
+				return
+			case msg, ok := <-cmdChan:
+				if !ok {
+					return
+				}
+				offset, err := msg.parseReplConfAck()
+				if err != nil {
+					fmt.Printf("%s\n", err)
+					return
+				}
+
+				fmt.Printf("received offset %d\n", offset)
+				sc.offset = offset
+				fanInChan <- offset
+				fmt.Printf("sent offset %d\n", offset)
+			}
+
+		}()
+	}
 
 	go func() {
 		for {
