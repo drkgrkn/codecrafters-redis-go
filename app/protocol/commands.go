@@ -211,7 +211,10 @@ func (s *Server) processWaitRequest(c *Connection, msg Message) error {
 	for {
 		select {
 		case <-ctx.Done():
-			_, _ = c.WriteString(SerializeInteger(inSyncCount))
+			_, err = c.WriteString(SerializeInteger(inSyncCount))
+			if err != nil {
+				return err
+			}
 			return ctx.Err()
 		case <-ch:
 			inSyncCount++
