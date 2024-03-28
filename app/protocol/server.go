@@ -358,8 +358,10 @@ func (s *Server) SyncSlaves(ctx context.Context) <-chan unit {
 			if err != nil {
 				return
 			}
+			fmt.Printf("received offset %d\n", offset)
 			sc.offset = offset
 			fanInChan <- offset
+			fmt.Printf("sent offset %d\n", offset)
 		}(sc)
 	}
 
