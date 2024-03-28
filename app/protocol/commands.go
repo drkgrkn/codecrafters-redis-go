@@ -164,8 +164,6 @@ func (s *Server) processPsyncRequest(c *Connection, msg Message) error {
 		return err
 	}
 
-	s.lock.Lock()
-	defer s.lock.Unlock()
 	s.masterConfig.slaves = append(s.masterConfig.slaves, &SlaveConnection{
 		Connection: c,
 		offset:     0,
@@ -177,8 +175,6 @@ func (s *Server) processPsyncRequest(c *Connection, msg Message) error {
 
 func (s *Server) processWaitRequest(c *Connection, msg Message) error {
 	ctx := context.Background()
-	s.lock.Lock()
-	defer s.lock.Unlock()
 
 	if len(msg.data) != 3 {
 		return errors.New("incorrect number of arguments for the wait command")

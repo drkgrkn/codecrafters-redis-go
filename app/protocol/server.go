@@ -156,11 +156,7 @@ func (s *Server) handleRequest(c *Connection) error {
 }
 
 func (s *Server) incrementOffset(i int) {
-	if s.masterConfig != nil {
-		s.masterConfig.offset += i
-	} else {
-		s.slaveConfig.offset += i
-	}
+	s.slaveConfig.offset += i
 }
 
 // handshake goes as:
@@ -303,8 +299,6 @@ func (s *Server) Set(key, val string) error {
 			SerializeBulkString(key),
 			SerializeBulkString(val),
 		))
-		s.lock.Lock()
-		defer s.lock.Unlock()
 		for _, c := range s.masterConfig.slaves {
 			command := fmt.Sprintf("\"%s %s %s\"", "SET", key, val)
 			addr := c.conn.RemoteAddr().String()
