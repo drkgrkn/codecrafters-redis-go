@@ -122,7 +122,7 @@ func (s *Server) handleClient(conn *Connection) error {
 }
 
 func (s *Server) handleRequest(c *Connection) error {
-	msg, err := c.parseCommand()
+	msg, err := c.nextCommand()
 	if err != nil {
 		return err
 	}
@@ -356,7 +356,7 @@ func (s *Server) SyncSlaves(ctx context.Context) <-chan struct{} {
 			if err != nil {
 				return
 			}
-			msg, err := sc.parseCommand()
+			msg, err := sc.nextCommand()
 			if err != nil {
 				return
 			}
@@ -374,6 +374,7 @@ func (s *Server) SyncSlaves(ctx context.Context) <-chan struct{} {
 			return
 		case offset := <-fanInChan:
 			if offset == masterOffset {
+				fmt.Printf("got %s\n", offset)
 				ch <- struct{}{}
 			}
 		}

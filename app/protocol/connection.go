@@ -96,7 +96,7 @@ func (c *Connection) parseWord() (string, int, error) {
 	}
 }
 
-func (c *Connection) parseCommand() (Message, error) {
+func (c *Connection) nextCommand() (Message, error) {
 	var msg Message
 	lead, n, err := c.nextString()
 	if err != nil {
