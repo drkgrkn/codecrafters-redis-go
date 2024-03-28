@@ -45,7 +45,6 @@ func (c *Connection) WriteString(s string) (int, error) {
 	if c.slaveToMaster {
 		return 0, nil
 	}
-	fmt.Println("writing ", s)
 	c.wLock.Lock()
 	defer c.wLock.Unlock()
 	n, err := c.rw.WriteString(s)
