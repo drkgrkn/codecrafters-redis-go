@@ -207,7 +207,7 @@ func (s *Server) processWaitRequest(c *Connection, msg Message) error {
 		}
 	}
 	ch := s.SyncSlaves(ctx)
-	inSyncCount := 0
+	inSyncCount := 1
 	for {
 		select {
 		case <-ctx.Done():
