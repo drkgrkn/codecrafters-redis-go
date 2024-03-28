@@ -191,11 +191,11 @@ func (s *Server) processWaitRequest(c *Connection, msg Message) error {
 	fmt.Printf("resyncing with slaves\n")
 	ch := s.SyncSlaves(ctx)
 	inSyncCount := 0
+	_, _ = c.WriteString(SerializeInteger(inSyncCount))
 	for {
 		select {
 		case <-ctx.Done():
 			fmt.Printf("%d replicas are in sync, responding due to timeout\n", inSyncCount)
-			fmt.Println(*s)
 			_, err = c.WriteString(SerializeInteger(inSyncCount))
 			if err != nil {
 				return err
