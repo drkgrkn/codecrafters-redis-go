@@ -106,15 +106,15 @@ func (s *Server) Listen() error {
 }
 
 func (s *Server) handleClient(conn *Connection) error {
-	defer func() {
-		conn.conn.Close()
-		fmt.Println("closing connection with client")
-	}()
 	for {
 		err := s.handleRequest(conn)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
+				conn.conn.Close()
+				fmt.Println("closing connection with client")
 				return errors.New("client disconnected")
+			} else if errors.Is(err, C2S) {
+				return nil
 			}
 			fmt.Printf("error with request %s\n", err)
 		}
@@ -144,7 +144,10 @@ func (s *Server) handleRequest(c *Connection) error {
 	case "replconf":
 		err = s.processReplConfRequest(c, msg)
 	case "psync":
-		err = s.processPsyncRequest(c, msg)
+		err := s.processPsyncRequest(c, msg)
+		if err == nil {
+			return C2S
+		}
 	case "wait":
 		err = s.processWaitRequest(c, msg)
 	}

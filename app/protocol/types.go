@@ -1,11 +1,14 @@
 package protocol
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 )
 
 type unit struct{}
+
+var C2S = errors.New("client converted to slave")
 
 func DeserializeSimpleString(s string) (string, error) {
 	ret := s[1:]
