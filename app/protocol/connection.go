@@ -13,6 +13,7 @@ type Connection struct {
 	conn  net.Conn
 	rw    *bufio.ReadWriter
 	wLock sync.Mutex
+	rLock sync.Mutex
 
 	slaveToMaster bool
 }
@@ -31,6 +32,7 @@ func NewConn(conn net.Conn, slaveToMaster bool) *Connection {
 		conn:          conn,
 		rw:            rw,
 		wLock:         sync.Mutex{},
+		rLock:         sync.Mutex{},
 		slaveToMaster: slaveToMaster,
 	}
 }
@@ -72,6 +74,8 @@ func (c *Connection) ReplyGetAck(offset int) (int, error) {
 
 // returns: read string, how many bytes were read, error
 func (c *Connection) nextString() (string, int, error) {
+	c.rLock.Lock()
+	defer c.rLock.Unlock()
 	s, err := c.rw.ReadString('\n')
 	if err != nil {
 		return "", 0, err
