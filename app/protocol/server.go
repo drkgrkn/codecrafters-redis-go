@@ -380,6 +380,7 @@ func (s *Server) SyncSlaves(ctx context.Context) <-chan unit {
 			}()
 			select {
 			case <-ctx.Done():
+				sc.Close()
 				return
 			case msg, ok := <-cmdChan:
 				if !ok {
