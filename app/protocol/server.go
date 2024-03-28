@@ -118,6 +118,7 @@ func (s *Server) handleClient(conn *Connection) error {
 				// client is promoted to replica
 				// cancel the handleClient loop
 				// but do not close the connection
+				fmt.Println("promoting client to slave")
 				return nil
 			}
 			fmt.Printf("error with request %s\n", err)
