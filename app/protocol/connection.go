@@ -38,14 +38,18 @@ func (c *Connection) Close() error {
 }
 
 func (c *Connection) WriteString(s string) (int, error) {
+	fmt.Println("started writing")
 	if c.slaveToMaster {
+		fmt.Println("couldnt writing")
 		return 0, nil
 	}
 	n, err := c.rw.WriteString(s)
 	if err != nil {
 		return n, err
 	}
+	fmt.Println("wrote")
 	err = c.rw.Flush()
+	fmt.Println("flushed")
 	return n, err
 }
 
