@@ -218,7 +218,9 @@ func (s *Server) processWaitRequest(c *Connection, msg Message) error {
 			return ctx.Err()
 		case <-ch:
 			inSyncCount++
+			fmt.Printf("%d replicas are in sync\n", inSyncCount)
 			if inSyncCount >= reqInSyncReplCount || len(s.masterConfig.slaves) == inSyncCount {
+				fmt.Printf("enought replicas are in sync %d\n", inSyncCount)
 				_, err = c.WriteString(SerializeInteger(inSyncCount))
 				return err
 			}
