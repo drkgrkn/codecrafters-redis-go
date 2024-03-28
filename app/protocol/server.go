@@ -105,21 +105,20 @@ func (s *Server) Listen() error {
 	}
 }
 
-func (s *Server) handleClient(conn *Connection) error {
+func (s *Server) handleClient(conn *Connection) {
 	for {
 		err := s.handleRequest(conn)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				conn.conn.Close()
 				fmt.Println("closing connection with client")
-				return errors.New("client disconnected")
-
-			} else if errors.Is(err, &ConnNotClientError{}) {
+				break
+			} else if errors.Is(err, ConnNotClientError) {
 				// client is promoted to replica
 				// cancel the handleClient loop
 				// but do not close the connection
 				fmt.Println("promoting client to slave")
-				return nil
+				break
 			}
 			fmt.Printf("error with request %s\n", err)
 		}
@@ -152,7 +151,7 @@ func (s *Server) handleRequest(c *Connection) error {
 		err := s.processPsyncRequest(c, msg)
 		fmt.Println("post psync req ", err)
 		if err == nil {
-			return &ConnNotClientError{}
+			return ConnNotClientError
 		}
 	case "wait":
 		err = s.processWaitRequest(c, msg)

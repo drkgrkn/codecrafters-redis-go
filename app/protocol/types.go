@@ -1,17 +1,14 @@
 package protocol
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 )
 
 type unit struct{}
 
-type ConnNotClientError struct{}
-
-func (e *ConnNotClientError) Error() string {
-	return "connection is not a client"
-}
+var ConnNotClientError = errors.New("connection is not a client")
 
 func DeserializeSimpleString(s string) (string, error) {
 	ret := s[1:]
