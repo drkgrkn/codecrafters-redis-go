@@ -172,7 +172,7 @@ func (s *Server) processWaitRequest(c *Connection, msg Message) error {
 		return fmt.Errorf("wait command third arg should be integer but %w", err)
 	}
 
-	ctx, ctxCancel := context.WithTimeout(ctx, time.Duration(ms)*time.Millisecond)
+	ctx, ctxCancel := context.WithTimeout(ctx, time.Duration(ms)*time.Millisecond/4)
 	defer ctxCancel()
 
 	currInSyncCount := 0
