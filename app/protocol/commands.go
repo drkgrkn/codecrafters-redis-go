@@ -196,8 +196,6 @@ func (s *Server) processWaitRequest(c *Connection, msg Message) error {
 		case <-ctx.Done():
 			fmt.Printf("%d replicas are in sync, responding due to timeout\n", inSyncCount)
 			_, err = c.WriteString(SerializeInteger(inSyncCount))
-			_, err = c.WriteString(SerializeInteger(inSyncCount))
-			_, err = c.WriteString(SerializeInteger(inSyncCount))
 			if err != nil {
 				return err
 			}
