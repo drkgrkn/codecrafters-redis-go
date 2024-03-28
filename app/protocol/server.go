@@ -296,35 +296,35 @@ func (s *Server) psyncWithMaster(c *Connection) error {
 // at least one replica failed during propagation
 func (s *Server) Set(key, val string) error {
 	s.store.Set(key, val)
-	if s.masterConfig != nil {
-		propagationCmd := (SerializeArray(
-			SerializeBulkString("SET"),
-			SerializeBulkString(key),
-			SerializeBulkString(val),
-		))
-		s.masterConfig.offset += len(propagationCmd)
-		for _, c := range s.masterConfig.slaves {
-			command := fmt.Sprintf("\"%s %s %s\"", "SET", key, val)
-			addr := c.conn.RemoteAddr().String()
-			fmt.Printf("syncing with slave %s, command: %s\n", addr, command)
-
-			_, err := c.rw.WriteString(propagationCmd)
-			if err != nil {
-				return fmt.Errorf(
-					"failure while propagating %s command to replica %s, error: %s",
-					command, addr, err)
-			}
-
-			err = c.rw.Flush()
-			if err != nil {
-				return fmt.Errorf(
-					"failure while propagating %s command to replica %s, error: %s",
-					command, addr, err)
-			}
-			fmt.Printf("synced with slave %s, command %s\n", addr, command)
-		}
+	if s.masterConfig == nil {
+		return nil
 	}
 
+	propagationCmd := (SerializeArray(
+		SerializeBulkString("SET"),
+		SerializeBulkString(key),
+		SerializeBulkString(val),
+	))
+	s.masterConfig.offset += len(propagationCmd)
+	for _, c := range s.masterConfig.slaves {
+		go func(sc *SlaveConnection) {
+			sc.lock.Lock()
+			defer sc.lock.Unlock()
+			command := fmt.Sprintf("\"%s %s %s\"", "SET", key, val)
+			addr := sc.conn.RemoteAddr().String()
+			fmt.Printf("syncing with slave %s, command: %s\n", addr, command)
+
+			_, err := sc.WriteString(propagationCmd)
+			if err != nil {
+				fmt.Printf(
+					"failure while propagating %s command to replica %s, error: %s",
+					command, addr, err)
+				return
+			}
+
+			fmt.Printf("synced with slave %s, command %s\n", addr, command)
+		}(c)
+	}
 	return nil
 }
 
