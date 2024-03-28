@@ -345,10 +345,10 @@ func (s *Server) Set(key, val string) error {
 // `s *Server` should be locked when this function is called
 //
 // channel sends when a slave's offset is equal to master's
-func (s *Server) SyncSlaves(ctx context.Context) <-chan unit {
+func (s *Server) SyncSlaves(ctx context.Context) <-chan int {
 	var (
 		fanInChan = make(chan int, len(s.masterConfig.slaves))
-		ch        = make(chan unit, len(s.masterConfig.slaves))
+		ch        = make(chan int, len(s.masterConfig.slaves))
 	)
 	s.masterConfig.offset += len(CommandReplConfGetAck)
 	for _, sc := range s.masterConfig.slaves {
@@ -357,6 +357,7 @@ func (s *Server) SyncSlaves(ctx context.Context) <-chan unit {
 	}
 
 	go func() {
+		inSyncCount := 0
 		for {
 			select {
 			case <-ctx.Done():
@@ -365,7 +366,8 @@ func (s *Server) SyncSlaves(ctx context.Context) <-chan unit {
 			case offset := <-fanInChan:
 				fmt.Printf("got offset %d, master is %d\n", offset, s.masterConfig.offset)
 				if offset == s.masterConfig.offset {
-					ch <- unit{}
+					inSyncCount++
+					ch <- inSyncCount
 				}
 			}
 		}
