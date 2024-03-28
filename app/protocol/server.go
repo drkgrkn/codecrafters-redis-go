@@ -333,7 +333,7 @@ func (s *Server) Set(key, val string) error {
 
 // `s *Server` should be locked when this function is called
 //
-// channel returns current in sync slave count
+// channel sends when a slave's offset is equal to master's
 func (s *Server) SyncSlaves(ctx context.Context) <-chan unit {
 	var (
 		fanInChan = make(chan int, len(s.masterConfig.slaves))
