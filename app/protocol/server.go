@@ -406,6 +406,7 @@ func (s *Server) SyncSlaves(ctx context.Context) <-chan unit {
 		for {
 			select {
 			case <-ctx.Done():
+				close(fanInChan)
 				return
 			case offset := <-fanInChan:
 				fmt.Printf("got offset %d, master is %d\n", offset, s.masterConfig.offset)

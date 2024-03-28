@@ -192,29 +192,25 @@ func (s *Server) processWaitRequest(c *Connection, msg Message) error {
 	fmt.Printf("not enough replicas were in sync, resyncing with slaves\n")
 	ch := s.SyncSlaves(ctx)
 	inSyncCount := 0
-	ctx, _ = context.WithTimeout(ctx, time.Duration(ms)*time.Millisecond)
+	ctx, ctxCancel = context.WithTimeout(ctx, time.Duration(ms)*time.Millisecond)
 	defer ctxCancel()
-	for {
-		select {
-		case <-ctx.Done():
-			fmt.Printf("%d replicas are in sync, responding due to timeout\n", inSyncCount)
+	for range ch {
+		inSyncCount++
+		fmt.Printf("%d replicas are in sync\n", inSyncCount)
+
+		if s.areEnoughReplicasInSync(inSyncCount, reqInSyncReplCount) {
+			fmt.Printf("enough replicas are in sync %d\n", inSyncCount)
 			_, err = c.WriteString(SerializeInteger(inSyncCount))
-			if err != nil {
-				return err
-			}
-
-			return ctx.Err()
-		case <-ch:
-			inSyncCount++
-			fmt.Printf("%d replicas are in sync\n", inSyncCount)
-
-			if s.areEnoughReplicasInSync(inSyncCount, reqInSyncReplCount) {
-				fmt.Printf("enough replicas are in sync %d\n", inSyncCount)
-				_, err = c.WriteString(SerializeInteger(inSyncCount))
-				return err
-			}
+			return err
 		}
 	}
+	fmt.Printf("%d replicas are in sync, responding due to timeout\n", inSyncCount)
+	_, err = c.WriteString(SerializeInteger(inSyncCount))
+	if err != nil {
+		return err
+	}
+
+	return ctx.Err()
 }
 
 func (s *Server) areEnoughReplicasInSync(curr, required int) bool {
