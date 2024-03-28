@@ -157,7 +157,8 @@ func (s *Server) processPsyncRequest(c *Connection, msg Message) error {
 
 func (s *Server) processWaitRequest(c *Connection, msg Message) error {
 	// this will probably get turned into a function parameter
-	ctx := context.Background()
+	ctx, ctxCancel := context.WithCancel(context.Background())
+	defer ctxCancel()
 
 	if len(msg.data) != 3 {
 		return errors.New("incorrect number of arguments for the wait command")
@@ -172,9 +173,6 @@ func (s *Server) processWaitRequest(c *Connection, msg Message) error {
 	if err != nil {
 		return fmt.Errorf("wait command third arg should be integer but %w", err)
 	}
-
-	ctx, ctxCancel := context.WithTimeout(ctx, time.Duration(ms)*time.Millisecond)
-	defer ctxCancel()
 
 	currInSyncCount := 0
 	for _, sc := range s.masterConfig.slaves {
@@ -194,6 +192,8 @@ func (s *Server) processWaitRequest(c *Connection, msg Message) error {
 	fmt.Printf("not enough replicas were in sync, resyncing with slaves\n")
 	ch := s.SyncSlaves(ctx)
 	inSyncCount := 0
+	ctx, _ = context.WithTimeout(ctx, time.Duration(ms)*time.Millisecond)
+	defer ctxCancel()
 	for {
 		select {
 		case <-ctx.Done():
