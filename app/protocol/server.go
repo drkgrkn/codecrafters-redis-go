@@ -1,11 +1,11 @@
 package protocol
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -35,7 +35,7 @@ type masterConfig struct {
 
 	lock   sync.Mutex
 	offset int
-	slaves []*Connection
+	slaves []*SlaveConnection
 }
 
 type ServerOptFunc func(*Server)
@@ -66,7 +66,7 @@ func NewServer(opts []ServerOptFunc) (*Server, error) {
 			id:     repliID,
 			offset: repliOffset,
 			lock:   sync.Mutex{},
-			slaves: []*Connection{},
+			slaves: []*SlaveConnection{},
 		},
 		slaveConfig: nil,
 	}
@@ -122,30 +122,9 @@ func (s *Server) handleClient(conn *Connection) error {
 }
 
 func (s *Server) handleRequest(c *Connection) error {
-	var msg Message
-	lead, n, err := c.nextString()
+	msg, err := c.parseCommand()
 	if err != nil {
 		return err
-	}
-	msg.readBytes += n
-	// Parse number of arguments
-	if lead[0] != '*' {
-		return fmt.Errorf("Leading command string should be array but was %s", lead)
-	}
-	arrLength, err := strconv.Atoi(lead[1:])
-	if err != nil {
-		return err
-	}
-
-	msg.data = make([]string, arrLength)
-
-	for i := 0; i < arrLength; i++ {
-		msg.data[i], n, err = c.parseWord()
-		if err != nil {
-			return err
-		}
-		msg.readBytes += n
-		fmt.Printf("data in command %d, %s\n", i, msg.data[i])
 	}
 
 	// command handling
@@ -349,4 +328,59 @@ func (s *Server) Set(key, val string) error {
 	}
 
 	return nil
+}
+
+// channel returns current in sync slave count
+func (s *Server) SyncSlaves(ctx context.Context) <-chan struct{} {
+	s.masterConfig.lock.Lock()
+	defer s.masterConfig.lock.Unlock()
+
+	var (
+		inSyncReplicaCount = 0
+		masterOffset       = s.masterConfig.offset
+		fanInChan          = make(chan int)
+		ch                 = make(chan struct{})
+
+		cmd = SerializeArray(
+			SerializeBulkString("REPLCONF"),
+			SerializeBulkString("GETACK"),
+			SerializeBulkString("*"),
+		)
+	)
+
+	s.masterConfig.offset += len(cmd)
+
+	for _, sc := range s.masterConfig.slaves {
+		go func(sc *SlaveConnection) {
+			sc.lock.Lock()
+			defer sc.lock.Unlock()
+			_, err := sc.WriteString(cmd)
+			if err != nil {
+				return
+			}
+			msg, err := sc.parseCommand()
+			if err != nil {
+				return
+			}
+			offset, err := msg.parseReplConfAck()
+			if err != nil {
+				return
+			}
+			fanInChan <- offset
+		}(sc)
+	}
+
+	go func() {
+		select {
+		case <-ctx.Done():
+			return
+		case offset := <-fanInChan:
+			if offset == masterOffset {
+				inSyncReplicaCount++
+				ch <- struct{}{}
+			}
+		}
+	}()
+
+	return ch, nil
 }

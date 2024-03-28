@@ -1,10 +1,12 @@
 package protocol
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -164,26 +166,49 @@ func (s *Server) processPsyncRequest(c *Connection, msg Message) error {
 
 	s.masterConfig.lock.Lock()
 	defer s.masterConfig.lock.Unlock()
-	s.masterConfig.slaves = append(s.masterConfig.slaves, c)
+	s.masterConfig.slaves = append(s.masterConfig.slaves, &SlaveConnection{
+		Connection: c,
+		offset:     0,
+		lock:       sync.Mutex{},
+	})
 
 	return nil
 }
 
 func (s *Server) processWaitRequest(c *Connection, msg Message) error {
+	ctx := context.Background()
+	s.masterConfig.lock.Lock()
+	defer s.masterConfig.lock.Unlock()
 	if len(msg.data) != 3 {
 		return errors.New("incorrect number of arguments for the wait command")
 	}
-
-	s.masterConfig.lock.Lock()
-	defer s.masterConfig.lock.Unlock()
-	_, err := c.WriteString(SerializeInteger(len(s.masterConfig.slaves)))
+	reqInSyncReplCount, err := strconv.Atoi(msg.data[1])
+	if err != nil {
+		return fmt.Errorf("wait command second arg should be integer but %w", err)
+	}
+	ms, err := strconv.Atoi(msg.data[2])
+	if err != nil {
+		return fmt.Errorf("wait command third arg should be integer but %w", err)
+	}
+	ctx, ctxCancel := context.WithTimeout(ctx, time.Duration(ms)*time.Millisecond)
+	defer ctxCancel()
+	_, err = c.WriteString(SerializeInteger(len(s.masterConfig.slaves)))
 	if err != nil {
 		return err
 	}
-	err = c.Flush()
-	if err != nil {
-		return err
+	ch := s.SyncSlaves(ctx)
+	inSyncCount := 0
+	for {
+		select {
+		case <-ctx.Done():
+			_, _ = c.WriteString(SerializeInteger(inSyncCount))
+			return ctx.Err()
+		case <-ch:
+			inSyncCount++
+			if inSyncCount == reqInSyncReplCount {
+				_, err = c.WriteString(SerializeInteger(inSyncCount))
+				return err
+			}
+		}
 	}
-
-	return nil
 }

@@ -6,6 +6,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 type Connection struct {
@@ -13,6 +14,12 @@ type Connection struct {
 	rw   *bufio.ReadWriter
 
 	slaveToMaster bool
+}
+
+type SlaveConnection struct {
+	*Connection
+	offset int
+	lock   sync.Mutex
 }
 
 func NewConn(conn net.Conn, slaveToMaster bool) *Connection {
@@ -34,7 +41,12 @@ func (c *Connection) WriteString(s string) (int, error) {
 	if c.slaveToMaster {
 		return 0, nil
 	}
-	return c.rw.WriteString(s)
+	n, err := c.rw.WriteString(s)
+	if err != nil {
+		return n, err
+	}
+	err = c.rw.Flush()
+	return n, err
 }
 
 func (c *Connection) ReplyGetAck(offset int) (int, error) {
@@ -57,7 +69,7 @@ func (c *Connection) nextString() (string, int, error) {
 	if err != nil {
 		return "", 0, err
 	}
-	s = strings.Trim(s, "\r\n")
+	s = strings.ToLower(strings.Trim(s, "\r\n"))
 	return s, len(s) + 2, nil
 }
 
@@ -82,6 +94,35 @@ func (c *Connection) parseWord() (string, int, error) {
 	default:
 		return "", 0, fmt.Errorf("unsupported starting character: %c", lead[0])
 	}
+}
+
+func (c *Connection) parseCommand() (Message, error) {
+	var msg Message
+	lead, n, err := c.nextString()
+	if err != nil {
+		return msg, err
+	}
+	msg.readBytes += n
+	// Parse number of arguments
+	if lead[0] != '*' {
+		return msg, fmt.Errorf("Leading command string should be array but was %s", lead)
+	}
+	arrLength, err := strconv.Atoi(lead[1:])
+	if err != nil {
+		return msg, err
+	}
+
+	msg.data = make([]string, arrLength)
+
+	for i := 0; i < arrLength; i++ {
+		msg.data[i], n, err = c.parseWord()
+		if err != nil {
+			return msg, err
+		}
+		msg.readBytes += n
+		fmt.Printf("data in command %d, %s\n", i, msg.data[i])
+	}
+	return msg, nil
 }
 
 func (c *Connection) parseRDBFile() (string, error) {

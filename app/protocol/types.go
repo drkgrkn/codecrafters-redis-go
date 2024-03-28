@@ -5,11 +5,6 @@ import (
 	"strings"
 )
 
-type Message struct {
-	data      []string
-	readBytes int
-}
-
 func DeserializeSimpleString(s string) (string, error) {
 	ret := s[1:]
 	return ret, nil
