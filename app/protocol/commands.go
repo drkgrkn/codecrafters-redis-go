@@ -172,7 +172,7 @@ func (s *Server) processWaitRequest(c *Connection, msg Message) error {
 		return fmt.Errorf("wait command third arg should be integer but %w", err)
 	}
 
-	ctx, ctxCancel := context.WithTimeout(ctx, time.Duration(ms)*time.Millisecond/2)
+	ctx, ctxCancel := context.WithTimeout(ctx, time.Duration(ms)*time.Millisecond)
 	defer ctxCancel()
 
 	currInSyncCount := 0
@@ -199,6 +199,7 @@ func (s *Server) processWaitRequest(c *Connection, msg Message) error {
 			if err != nil {
 				return err
 			}
+			fmt.Printf("wrote %s\n", SerializeInteger(inSyncCount))
 			return ctx.Err()
 		case <-ch:
 			inSyncCount++
