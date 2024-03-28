@@ -45,6 +45,7 @@ func (c *Connection) WriteString(s string) (int, error) {
 	if c.slaveToMaster {
 		return 0, nil
 	}
+	fmt.Printf("getting lock for %s\n", s)
 	c.wLock.Lock()
 	defer c.wLock.Unlock()
 	n, err := c.rw.WriteString(s)
@@ -52,6 +53,7 @@ func (c *Connection) WriteString(s string) (int, error) {
 		return n, err
 	}
 	err = c.rw.Flush()
+	fmt.Printf("dropping lock for %s\n", s)
 	return n, err
 }
 
