@@ -328,7 +328,7 @@ func (s *Server) Set(key, val string) error {
 			fmt.Printf("synced with slave %s, command %s\n", addr, command)
 		}(c)
 	}
-	wg.Done()
+	wg.Wait()
 	return nil
 }
 
