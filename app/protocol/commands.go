@@ -191,7 +191,6 @@ func (s *Server) processWaitRequest(c *Connection, msg Message) error {
 	fmt.Printf("resyncing with slaves\n")
 	ch := s.SyncSlaves(ctx)
 	inSyncCount := 0
-	_, _ = c.WriteString(SerializeInteger(inSyncCount))
 	for {
 		select {
 		case <-ctx.Done():
