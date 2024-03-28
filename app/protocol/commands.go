@@ -179,6 +179,7 @@ func (s *Server) processWaitRequest(c *Connection, msg Message) error {
 	ctx := context.Background()
 	s.masterConfig.lock.Lock()
 	defer s.masterConfig.lock.Unlock()
+
 	if len(msg.data) != 3 {
 		return errors.New("incorrect number of arguments for the wait command")
 	}
