@@ -327,6 +327,7 @@ func (s *Server) Set(key, val string) error {
 		}(c)
 	}
 	wg.Wait()
+	fmt.Println("SET FINISHED")
 	return nil
 }
 
