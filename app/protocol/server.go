@@ -311,8 +311,6 @@ func (s *Server) Set(key, val string) error {
 		wg.Add(1)
 		func(sc *SlaveConnection) {
 			defer wg.Done()
-			sc.lock.Lock()
-			defer sc.lock.Unlock()
 			command := fmt.Sprintf("\"%s %s %s\"", "SET", key, val)
 			addr := sc.conn.RemoteAddr().String()
 			fmt.Printf("syncing with slave %s, command: %s\n", addr, command)
@@ -352,8 +350,8 @@ func (s *Server) SyncSlaves(ctx context.Context) <-chan unit {
 	go func() {
 		for _, sc := range s.masterConfig.slaves {
 			func(sc *SlaveConnection) {
-				sc.lock.Lock()
-				defer sc.lock.Unlock()
+				sc.offsetLock.Lock()
+				defer sc.offsetLock.Unlock()
 				_, err := sc.WriteString(cmd)
 				if err != nil {
 					return

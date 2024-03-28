@@ -151,7 +151,7 @@ func (s *Server) processPsyncRequest(c *Connection, msg Message) error {
 	s.masterConfig.slaves = append(s.masterConfig.slaves, &SlaveConnection{
 		Connection: c,
 		offset:     0,
-		lock:       sync.Mutex{},
+		offsetLock: sync.Mutex{},
 	})
 
 	return nil

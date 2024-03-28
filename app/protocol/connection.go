@@ -10,16 +10,17 @@ import (
 )
 
 type Connection struct {
-	conn net.Conn
-	rw   *bufio.ReadWriter
+	conn  net.Conn
+	rw    *bufio.ReadWriter
+	wLock sync.Mutex
 
 	slaveToMaster bool
 }
 
 type SlaveConnection struct {
 	*Connection
-	offset int
-	lock   sync.Mutex
+	offset     int
+	offsetLock sync.Mutex
 }
 
 func NewConn(conn net.Conn, slaveToMaster bool) *Connection {
@@ -27,9 +28,10 @@ func NewConn(conn net.Conn, slaveToMaster bool) *Connection {
 	w := bufio.NewWriter(conn)
 	rw := bufio.NewReadWriter(r, w)
 	return &Connection{
-		conn,
-		rw,
-		slaveToMaster,
+		conn:          conn,
+		rw:            rw,
+		wLock:         sync.Mutex{},
+		slaveToMaster: slaveToMaster,
 	}
 }
 
@@ -41,6 +43,8 @@ func (c *Connection) WriteString(s string) (int, error) {
 	if c.slaveToMaster {
 		return 0, nil
 	}
+	c.wLock.Lock()
+	defer c.wLock.Unlock()
 	n, err := c.rw.WriteString(s)
 	if err != nil {
 		return n, err
@@ -50,6 +54,8 @@ func (c *Connection) WriteString(s string) (int, error) {
 }
 
 func (c *Connection) ReplyGetAck(offset int) (int, error) {
+	c.wLock.Lock()
+	defer c.wLock.Unlock()
 	n, err := c.rw.WriteString(
 		SerializeArray(
 			SerializeBulkString("REPLCONF"),
@@ -62,10 +68,6 @@ func (c *Connection) ReplyGetAck(offset int) (int, error) {
 	}
 	err = c.rw.Flush()
 	return n, err
-}
-
-func (c *Connection) Flush() error {
-	return c.rw.Flush()
 }
 
 // returns: read string, how many bytes were read, error
