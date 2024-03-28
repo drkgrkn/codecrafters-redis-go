@@ -114,7 +114,7 @@ func (s *Server) handleClient(conn *Connection) error {
 				fmt.Println("closing connection with client")
 				return errors.New("client disconnected")
 
-			} else if errors.Is(err, &ConnNotClientError{}) {
+			} else if errors.Is(err, ConnNotClientError) {
 				// client is promoted to replica
 				// cancel the handleClient loop
 				// but do not close the connection
