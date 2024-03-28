@@ -364,6 +364,7 @@ func (s *Server) SyncSlaves(ctx context.Context) <-chan struct{} {
 			if err != nil {
 				return
 			}
+			sc.offset = offset
 			fanInChan <- offset
 		}(sc)
 	}
