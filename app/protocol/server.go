@@ -301,11 +301,11 @@ func (s *Server) Set(key, val string) error {
 	}
 
 	wg := sync.WaitGroup{}
-	propagationCmd := (SerializeArray(
+	propagationCmd := SerializeArray(
 		SerializeBulkString("SET"),
 		SerializeBulkString(key),
 		SerializeBulkString(val),
-	))
+	)
 	s.masterConfig.offset += len(propagationCmd)
 	for _, c := range s.masterConfig.slaves {
 		wg.Add(1)
