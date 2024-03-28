@@ -370,22 +370,34 @@ func (s *Server) SyncSlaves(ctx context.Context) <-chan unit {
 					return
 				}
 
-				msg, err := sc.nextCommand()
-				if err != nil {
-					fmt.Printf("%s\n", err)
+				cmdChan := make(chan Message)
+				go func() {
+					defer close(cmdChan)
+					msg, err := sc.nextCommand()
+					if err != nil {
+						fmt.Printf("%s\n", err)
+					}
+					cmdChan <- msg
+				}()
+				select {
+				case <-ctx.Done():
 					return
+				case msg, ok := <-cmdChan:
+					if !ok {
+						return
+					}
+					offset, err := msg.parseReplConfAck()
+					if err != nil {
+						fmt.Printf("%s\n", err)
+						return
+					}
+
+					fmt.Printf("received offset %d\n", offset)
+					sc.offset = offset
+					fanInChan <- offset
+					fmt.Printf("sent offset %d\n", offset)
 				}
 
-				offset, err := msg.parseReplConfAck()
-				if err != nil {
-					fmt.Printf("%s\n", err)
-					return
-				}
-
-				fmt.Printf("received offset %d\n", offset)
-				sc.offset = offset
-				fanInChan <- offset
-				fmt.Printf("sent offset %d\n", offset)
 			}()
 		}
 	}()
