@@ -349,63 +349,18 @@ func (s *Server) SyncSlaves(ctx context.Context) <-chan unit {
 	var (
 		fanInChan = make(chan int, len(s.masterConfig.slaves))
 		ch        = make(chan unit, len(s.masterConfig.slaves))
-		cmd       = SerializeArray(
-			SerializeBulkString("REPLCONF"),
-			SerializeBulkString("GETACK"),
-			SerializeBulkString("*"),
-		)
 	)
-
-	s.masterConfig.offset += len(cmd)
-
+	s.masterConfig.offset += len(CommandReplConfGetAck)
 	for _, sc := range s.masterConfig.slaves {
 		sc := sc
-		go func() {
-			sc.lock.Lock()
-			defer sc.lock.Unlock()
-
-			_, err := sc.WriteString(cmd)
-			if err != nil {
-				return
-			}
-
-			cmdChan := make(chan Message)
-			go func() {
-				defer close(cmdChan)
-				msg, err := sc.nextCommand()
-				if err != nil {
-					fmt.Printf("%s\n", err)
-				}
-				cmdChan <- msg
-			}()
-			select {
-			case <-ctx.Done():
-				sc.Close()
-				return
-			case msg, ok := <-cmdChan:
-				if !ok {
-					return
-				}
-				offset, err := msg.parseReplConfAck()
-				if err != nil {
-					fmt.Printf("%s\n", err)
-					return
-				}
-
-				fmt.Printf("received offset %d\n", offset)
-				sc.offset = offset
-				fanInChan <- offset
-				fmt.Printf("sent offset %d\n", offset)
-			}
-
-		}()
+		go sc.Sync(ctx, fanInChan)
 	}
 
 	go func() {
 		for {
 			select {
 			case <-ctx.Done():
-				close(fanInChan)
+				close(ch)
 				return
 			case offset := <-fanInChan:
 				fmt.Printf("got offset %d, master is %d\n", offset, s.masterConfig.offset)

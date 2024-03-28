@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"net"
 	"strconv"
@@ -149,4 +150,42 @@ func (c *Connection) parseRDBFile() (string, error) {
 	}
 
 	return string(buf), nil
+}
+
+func (sc *SlaveConnection) Sync(ctx context.Context, ch chan<- int) {
+	sc.lock.Lock()
+	defer sc.lock.Unlock()
+
+	_, err := sc.WriteString(CommandReplConfGetAck)
+	if err != nil {
+		return
+	}
+
+	cmdChan := make(chan Message)
+	go func() {
+		defer close(cmdChan)
+		msg, err := sc.nextCommand()
+		if err != nil {
+			fmt.Printf("%s\n", err)
+		}
+		cmdChan <- msg
+	}()
+	select {
+	case <-ctx.Done():
+		return
+	case msg, ok := <-cmdChan:
+		if !ok {
+			return
+		}
+		offset, err := msg.parseReplConfAck()
+		if err != nil {
+			fmt.Printf("%s\n", err)
+			return
+		}
+
+		fmt.Printf("received offset %d\n", offset)
+		sc.offset = offset
+		ch <- offset
+	}
+
 }

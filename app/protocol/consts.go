@@ -13,3 +13,9 @@ func getEmptyRDBFileBinary() string {
 	}
 	return string(b)
 }
+
+var CommandReplConfGetAck = SerializeArray(
+	SerializeBulkString("REPLCONF"),
+	SerializeBulkString("GETACK"),
+	SerializeBulkString("*"),
+)
