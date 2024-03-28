@@ -364,13 +364,15 @@ func (s *Server) SyncSlaves(ctx context.Context) <-chan struct{} {
 	}
 
 	go func() {
-		select {
-		case <-ctx.Done():
-			return
-		case offset := <-fanInChan:
-			fmt.Printf("got offset %d, master is %d\n", offset, s.masterConfig.offset)
-			if offset == s.masterConfig.offset {
-				ch <- struct{}{}
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case offset := <-fanInChan:
+				fmt.Printf("got offset %d, master is %d\n", offset, s.masterConfig.offset)
+				if offset == s.masterConfig.offset {
+					ch <- struct{}{}
+				}
 			}
 		}
 	}()
