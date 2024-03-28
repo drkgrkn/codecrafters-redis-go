@@ -150,8 +150,9 @@ func (s *Server) handleRequest(c *Connection) error {
 		err = s.processReplConfRequest(c, msg)
 	case "psync":
 		err := s.processPsyncRequest(c, msg)
+		fmt.Println("post psync req ", err)
 		if err == nil {
-			err = &ConnNotClientError{}
+			return &ConnNotClientError{}
 		}
 	case "wait":
 		err = s.processWaitRequest(c, msg)
