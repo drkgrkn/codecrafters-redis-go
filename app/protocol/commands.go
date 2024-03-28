@@ -194,7 +194,7 @@ func (s *Server) processWaitRequest(c *Connection, msg Message) error {
 	ctx, ctxCancel := context.WithTimeout(ctx, time.Duration(ms)*time.Millisecond)
 	defer ctxCancel()
 
-	currInSyncCount := 0
+	currInSyncCount := 1
 	for _, sc := range s.masterConfig.slaves {
 		if s.masterConfig.offset == sc.offset {
 			currInSyncCount++
