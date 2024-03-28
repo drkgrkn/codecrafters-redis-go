@@ -300,6 +300,7 @@ func (s *Server) Set(key, val string) error {
 		return nil
 	}
 
+	wg := sync.WaitGroup{}
 	propagationCmd := (SerializeArray(
 		SerializeBulkString("SET"),
 		SerializeBulkString(key),
@@ -307,7 +308,9 @@ func (s *Server) Set(key, val string) error {
 	))
 	s.masterConfig.offset += len(propagationCmd)
 	for _, c := range s.masterConfig.slaves {
+		wg.Add(1)
 		go func(sc *SlaveConnection) {
+			defer wg.Done()
 			sc.lock.Lock()
 			defer sc.lock.Unlock()
 			command := fmt.Sprintf("\"%s %s %s\"", "SET", key, val)
@@ -325,6 +328,7 @@ func (s *Server) Set(key, val string) error {
 			fmt.Printf("synced with slave %s, command %s\n", addr, command)
 		}(c)
 	}
+	wg.Done()
 	return nil
 }
 
