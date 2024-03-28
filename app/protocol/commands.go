@@ -196,6 +196,7 @@ func (s *Server) processWaitRequest(c *Connection, msg Message) error {
 
 	currInSyncCount := 0
 	for _, sc := range s.masterConfig.slaves {
+		fmt.Printf("master offset %d replica offset is %d\n", s.masterConfig.offset, sc.offset)
 		if s.masterConfig.offset == sc.offset {
 			currInSyncCount++
 		}
