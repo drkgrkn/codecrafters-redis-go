@@ -299,6 +299,7 @@ func (s *Server) Set(key, val string) error {
 			SerializeBulkString(key),
 			SerializeBulkString(val),
 		))
+		s.masterConfig.offset += len(propagationCmd)
 		for _, c := range s.masterConfig.slaves {
 			command := fmt.Sprintf("\"%s %s %s\"", "SET", key, val)
 			addr := c.conn.RemoteAddr().String()
