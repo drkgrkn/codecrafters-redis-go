@@ -12,7 +12,7 @@ import (
 type Connection struct {
 	conn  net.Conn
 	rw    *bufio.ReadWriter
-	wLock sync.Mutex
+	lock  sync.Mutex
 	rLock sync.Mutex
 
 	slaveToMaster bool
@@ -31,8 +31,7 @@ func NewConn(conn net.Conn, slaveToMaster bool) *Connection {
 	return &Connection{
 		conn:          conn,
 		rw:            rw,
-		wLock:         sync.Mutex{},
-		rLock:         sync.Mutex{},
+		lock:          sync.Mutex{},
 		slaveToMaster: slaveToMaster,
 	}
 }
@@ -45,21 +44,19 @@ func (c *Connection) WriteString(s string) (int, error) {
 	if c.slaveToMaster {
 		return 0, nil
 	}
-	fmt.Println("writing ", s)
-	c.wLock.Lock()
-	defer c.wLock.Unlock()
+	c.lock.Lock()
+	defer c.lock.Unlock()
 	n, err := c.rw.WriteString(s)
 	if err != nil {
 		return n, err
 	}
 	err = c.rw.Flush()
-	fmt.Printf("flushed %s, err %s", s, err)
 	return n, err
 }
 
 func (c *Connection) ReplyGetAck(offset int) (int, error) {
-	c.wLock.Lock()
-	defer c.wLock.Unlock()
+	c.lock.Lock()
+	defer c.lock.Unlock()
 	n, err := c.rw.WriteString(
 		SerializeArray(
 			SerializeBulkString("REPLCONF"),
@@ -144,7 +141,7 @@ func (c *Connection) parseRDBFile() (string, error) {
 		return "", err
 	}
 	if lead[0] != '$' {
-		return "", fmt.Errorf("expected $ symbol but got %c", lead[0])
+		return "", fmt.Errorf("expected symbol $ but got %c", lead[0])
 	}
 	i, err := strconv.Atoi(lead[1:])
 	if err != nil {

@@ -158,6 +158,7 @@ func (s *Server) processPsyncRequest(c *Connection, msg Message) error {
 }
 
 func (s *Server) processWaitRequest(c *Connection, msg Message) error {
+	// this will probably get turned into a function parameter
 	ctx := context.Background()
 
 	if len(msg.data) != 3 {
@@ -206,6 +207,7 @@ func (s *Server) processWaitRequest(c *Connection, msg Message) error {
 			if inSyncCount >= reqInSyncReplCount || len(s.masterConfig.slaves) == inSyncCount {
 				fmt.Printf("enough replicas are in sync %d\n", inSyncCount)
 				_, err = c.WriteString(SerializeInteger(inSyncCount))
+				time.Sleep(50 * time.Millisecond)
 				return err
 			}
 		}
