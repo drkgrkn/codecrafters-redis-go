@@ -165,6 +165,7 @@ func (sc *SlaveConnection) Sync(ctx context.Context, ch chan<- int) {
 	go func() {
 		defer close(cmdChan)
 		msg, err := sc.nextCommand()
+		fmt.Println("recv: ", msg.data)
 		if err != nil {
 			fmt.Printf("%s\n", err)
 		}
@@ -177,6 +178,8 @@ func (sc *SlaveConnection) Sync(ctx context.Context, ch chan<- int) {
 		if !ok {
 			return
 		}
+
+		fmt.Println("recv: ", msg.data)
 		offset, err := msg.parseReplConfAck()
 		if err != nil {
 			fmt.Printf("%s\n", err)

@@ -194,7 +194,6 @@ func (s *Server) processWaitRequest(c *Connection, msg Message) error {
 	defer ctxCancel()
 
 	ch := s.SyncSlaves(ctx)
-	time.Sleep(100 * time.Millisecond)
 	for inSyncCount = range ch {
 		fmt.Printf("%d replicas are in sync\n", inSyncCount)
 
